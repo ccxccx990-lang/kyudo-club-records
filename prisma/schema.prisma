@@ -1,0 +1,54 @@
+// 弓道部：合同練習の的中記録（〇×）用スキーマ
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Member {
+  id         String   @id @default(cuid())
+  name       String
+  gradeYear  String   @default("") // 1年〜4年（プルダウン）
+  gender     String   @default("") // 男 / 女
+  role       String   @default("") // 役職（プルダウン）
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  records    RoundRecord[]
+}
+
+model PracticeSession {
+  id         String   @id @default(cuid())
+  practiceDate String // YYYY-MM-DD（タイムゾーンずれ防止のため文字列で保持）
+  memo       String   @default("")
+  sessionKind String @default("joint") // joint=合同練習, match=試合
+  roundCount Int      @default(5)
+  // 参加対象: all=男女合同, 男=男子のみ, 女=女子のみ
+  genderScope     String   @default("all")
+  // attendanceJson: memberId -> present|absent（未記載は参加）
+  attendanceJson  String   @default("{}")
+  // lineupTeamsJson: チーム配列。[] のときは出席者を学年順で並べる
+  lineupTeamsJson String   @default("[]")
+  teamSize        Int      @default(4)
+  maxMato         Int      @default(8)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  records    RoundRecord[]
+}
+
+// 1立ち＝4射。marks は DB 上で o=的中, x=外し の4文字（例: ooxx）
+model RoundRecord {
+  id         String   @id @default(cuid())
+  sessionId  String
+  memberId   String
+  roundIndex Int
+  marks      String
+
+  session PracticeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  member  Member          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, memberId, roundIndex])
+}
