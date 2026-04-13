@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
+/** Vercel 本番: ブラウザを node_modules 配下に同梱する（ビルド時 install とセット） */
+if (process.env.VERCEL === "1" && process.env.PLAYWRIGHT_BROWSERS_PATH == null) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = "0";
+}
+
 /** クライアントが送る HTML 断片の上限（悪用防止） */
 const MAX_HTML_CHARS = 2_500_000;
 
@@ -65,7 +70,15 @@ export async function POST(req: Request) {
   const { chromium } = await import("playwright");
   let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
   try {
-    browser = await chromium.launch({ headless: true });
+    browser = await chromium.launch({
+      headless: true,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--single-process",
+      ],
+    });
     const page = await browser.newPage();
     const doc = wrapPrintHtml(html);
     await page.setContent(doc, { waitUntil: "load", timeout: 30_000 });
