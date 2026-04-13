@@ -12,6 +12,15 @@ import {
   type GenderScope,
   type MemberForPractice,
 } from "@/lib/practiceSessionPlan";
+import {
+  uiBtnAccent,
+  uiBtnDangerOutline,
+  uiBtnDangerSolid,
+  uiBtnPrimary,
+  uiBtnSecondary,
+  uiLinkChip,
+  uiToggleChoice,
+} from "@/lib/uiButtons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -189,13 +198,11 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm text-zinc-500">
-            <Link className="text-indigo-800 hover:underline" href="/practices">
-              ← 一覧へ
-            </Link>
-          </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <Link className={`${uiLinkChip} text-xs`} href="/practices">
+            ← 一覧へ
+          </Link>
           <h1 className="mt-2 text-2xl font-bold">
             <Link
               href={`/practices/${session.id}/marks`}
@@ -208,11 +215,8 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
           <p className="mt-1 text-xs text-zinc-500">立ち数: {session.roundCount}</p>
         </div>
         {!isAdmin ? (
-          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
-            <Link
-              href={`/practices/${session.id}/marks`}
-              className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
-            >
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
+            <Link href={`/practices/${session.id}/marks`} className={`${uiBtnAccent} w-full justify-center sm:w-auto`}>
               的中を見る
             </Link>
           </div>
@@ -253,11 +257,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
                   type="button"
                   disabled={busy}
                   onClick={() => setGenderScope(opt.value)}
-                  className={`rounded-md border px-3 py-2 text-sm font-medium ${
-                    genderScope === opt.value
-                      ? "border-indigo-600 bg-indigo-50 text-indigo-900"
-                      : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
-                  }`}
+                  className={uiToggleChoice(genderScope === opt.value)}
                 >
                   {opt.label}
                 </button>
@@ -276,7 +276,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
                     type="button"
                     disabled={busy}
                     onClick={() => toggleAttendance(m.id)}
-                    className={`flex min-w-[4.5rem] flex-col rounded-lg border-2 px-2 py-1.5 text-left text-xs transition ${
+                    className={`flex min-h-[3.25rem] min-w-[4.75rem] flex-col justify-center rounded-lg border-2 px-2.5 py-2 text-left text-xs shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                       isAbsent
                         ? "border-red-300 bg-red-50 text-red-900"
                         : "border-emerald-300 bg-emerald-50 text-emerald-950"
@@ -294,30 +294,30 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-4">
+          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               disabled={busy}
-              className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+              className={`${uiBtnDangerOutline} w-full justify-center sm:w-auto`}
+              onClick={openDeleteDialog}
+            >
+              この練習を削除
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className={`${uiBtnPrimary} w-full justify-center sm:w-auto`}
               onClick={() => void savePlan()}
             >
               参加区分・出席を保存
             </button>
             <Link
               href={`/practices/${session.id}/lineup`}
-              className="inline-flex items-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
+              className={`${uiBtnSecondary} w-full justify-center sm:ml-auto sm:w-auto`}
               onClick={navigateToLineup}
             >
               チーム編成（1〜6人）へ →
             </Link>
-            <button
-              type="button"
-              disabled={busy}
-              className="ml-auto rounded-md border border-red-200 px-3 py-2 text-sm text-red-800 hover:bg-red-50 disabled:opacity-50"
-              onClick={openDeleteDialog}
-            >
-              この練習を削除
-            </button>
           </div>
           {planMsg ? <p className="mt-2 text-sm text-red-700">{planMsg}</p> : null}
         </section>
@@ -367,17 +367,13 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
               className="whitespace-pre-line text-sm font-medium text-zinc-900"
             >{`この練習を削除します。
 本当によろしいですか？`}</p>
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50"
-                onClick={closeDeleteDialog}
-              >
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+              <button type="button" className={`${uiBtnSecondary} w-full sm:w-auto`} onClick={closeDeleteDialog}>
                 いいえ
               </button>
               <button
                 type="button"
-                className="rounded-md bg-red-700 px-4 py-2 text-sm font-semibold text-white hover:bg-red-800"
+                className={`${uiBtnDangerSolid} w-full sm:w-auto`}
                 onClick={() => void runDeleteAfterFirstConfirm()}
               >
                 はい

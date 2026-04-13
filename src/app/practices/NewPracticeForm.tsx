@@ -1,5 +1,6 @@
 "use client";
 
+import { uiBtnPrimary, uiBtnSmSecondary, uiBtnStepper } from "@/lib/uiButtons";
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
@@ -142,7 +143,7 @@ export function NewPracticeForm() {
             />
             <button
               type="button"
-              className="inline-flex shrink-0 items-center justify-center rounded-md border border-zinc-300 bg-white px-3 py-2 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+              className={`${uiBtnSmSecondary} shrink-0`}
               title="カレンダーから選ぶ"
               onClick={() => openNativeDatePicker(hiddenDateRef.current)}
             >
@@ -174,19 +175,11 @@ export function NewPracticeForm() {
         <div className="block text-sm text-zinc-700">
           <span className="block">最大的数（1立ちあたりの的の数の上限・4〜24）</span>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
-              onClick={() => setMaxMato((n) => Math.max(4, n - 1))}
-            >
+            <button type="button" className={uiBtnStepper} onClick={() => setMaxMato((n) => Math.max(4, n - 1))}>
               −
             </button>
             <span className="min-w-[2.5rem] text-center font-semibold text-zinc-900">{maxMato}</span>
-            <button
-              type="button"
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
-              onClick={() => setMaxMato((n) => Math.min(24, n + 1))}
-            >
+            <button type="button" className={uiBtnStepper} onClick={() => setMaxMato((n) => Math.min(24, n + 1))}>
               +
             </button>
             <span className="text-xs text-zinc-500">チーム編成の立ち構成プレビューに使います</span>
@@ -195,30 +188,18 @@ export function NewPracticeForm() {
         <div className="block text-sm text-zinc-700">
           <span className="block">立ち数（1〜30）</span>
           <div className="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
-              onClick={() => setRoundCount((n) => Math.max(1, n - 1))}
-            >
+            <button type="button" className={uiBtnStepper} onClick={() => setRoundCount((n) => Math.max(1, n - 1))}>
               −
             </button>
             <span className="min-w-[2.5rem] text-center font-semibold text-zinc-900">{roundCount}</span>
-            <button
-              type="button"
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm hover:bg-zinc-50"
-              onClick={() => setRoundCount((n) => Math.min(30, n + 1))}
-            >
+            <button type="button" className={uiBtnStepper} onClick={() => setRoundCount((n) => Math.min(30, n + 1))}>
               +
             </button>
           </div>
         </div>
       </div>
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      <button
-        type="submit"
-        disabled={busy}
-        className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
-      >
+      <button type="submit" disabled={busy} className={`${uiBtnPrimary} w-full max-w-md justify-center sm:w-auto`}>
         {busy ? "作成中…" : "作成して記録へ"}
       </button>
     </form>

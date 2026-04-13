@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
@@ -7,11 +8,22 @@ import {
   type SessionKindFilter,
 } from "@/lib/personalHitRateReport";
 
+export const runtime = "nodejs";
+
 type SessionRow = {
   practiceDate: string;
   sessionKind: string;
   records: { memberId: string; marks: string }[];
 };
+
+function isMissingSessionKindColumn(e: unknown): boolean {
+  if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2022") {
+    const col = String((e.meta as Record<string, unknown> | undefined)?.column ?? "");
+    return col.includes("sessionKind");
+  }
+  const msg = e instanceof Error ? e.message : String(e);
+  return /sessionKind|Unknown field|does not exist|no such column/i.test(msg);
+}
 
 /** DB に sessionKind 列が無い（未マイグレート）場合は joint 固定で読み込む */
 async function loadSessionsInDateRange(
@@ -28,10 +40,7 @@ async function loadSessionsInDateRange(
       },
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (!/sessionKind|Unknown field|does not exist|no such column/i.test(msg)) {
-      throw e;
-    }
+    if (!isMissingSessionKindColumn(e)) throw e;
     const rows = await prisma.practiceSession.findMany({
       where: { practiceDate: { gte: from, lte: to } },
       select: {
@@ -41,6 +50,22 @@ async function loadSessionsInDateRange(
     });
     return rows.map((r) => ({ ...r, sessionKind: "joint" }));
   }
+}
+
+/** API 利用者向けに短い説明に変換（詳細はサーバーログ） */
+function prismaErrorToUserMessage(e: unknown): string {
+  if (e instanceof Prisma.PrismaClientInitializationError) {
+    return "データベースに接続できません。DATABASE_URL（SSL・IPv4/プール設定）と Vercel の環境変数を確認してください。";
+  }
+  if (e instanceof Prisma.PrismaClientKnownRequestError) {
+    if (e.code === "P1001" || e.code === "P1017") {
+      return "データベースサーバーに届きません。接続文字列とネットワーク（Supabase の Session pooler 等）を確認してください。";
+    }
+    if (e.code === "P2021") {
+      return "テーブルが見つかりません。本番で prisma migrate deploy が成功しているか確認してください。";
+    }
+  }
+  return e instanceof Error ? e.message : "サーバーでエラーが発生しました";
 }
 
 function parseYear(s: string | null): number | null {
@@ -99,8 +124,14 @@ export async function GET(req: Request) {
       rows,
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "サーバーでエラーが発生しました";
+    const message = prismaErrorToUserMessage(e);
     console.error("[personal-hit-rate]", e);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status =
+      e instanceof Prisma.PrismaClientInitializationError ||
+      (e instanceof Prisma.PrismaClientKnownRequestError &&
+        (e.code === "P1001" || e.code === "P1017"))
+        ? 503
+        : 500;
+    return NextResponse.json({ error: message }, { status });
   }
 }

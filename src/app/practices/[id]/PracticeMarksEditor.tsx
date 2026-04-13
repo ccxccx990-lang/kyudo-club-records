@@ -26,6 +26,7 @@ import {
   type GenderScope,
   type MemberForPractice,
 } from "@/lib/practiceSessionPlan";
+import { uiBtnPrimary, uiLinkChip } from "@/lib/uiButtons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -108,7 +109,9 @@ function MarksRoundShotGrid({
           disabled={!isAdmin}
           onClick={() => onCycle(idx)}
           className={`flex min-h-7 w-full min-w-0 items-center justify-center rounded-none border-r border-zinc-400 bg-white text-xs leading-none text-zinc-900 last:border-r-0 sm:min-h-8 sm:text-sm ${
-            isAdmin ? "cursor-pointer hover:bg-sky-50 active:bg-sky-100" : "cursor-default bg-zinc-50 text-zinc-600"
+            isAdmin
+              ? "cursor-pointer hover:bg-sky-50 active:bg-sky-100 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-0"
+              : "cursor-default bg-zinc-50 text-zinc-600"
           }`}
           aria-label={`${roundIndex}立目 第${idx + 1}射`}
         >
@@ -397,21 +400,19 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm text-zinc-500">
-            <Link className="text-indigo-800 hover:underline" href={`/practices/${session.id}`}>
-              ← 参加区分・出席へ
+      <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <Link className={uiLinkChip} href={`/practices/${session.id}`}>
+              ← 参加区分・出席
             </Link>
-            {" · "}
-            <Link className="text-indigo-800 hover:underline" href={`/practices/${session.id}/lineup`}>
-              チーム編成へ
+            <Link className={uiLinkChip} href={`/practices/${session.id}/lineup`}>
+              チーム編成
             </Link>
-            {" · "}
-            <Link className="text-indigo-800 hover:underline" href="/practices">
+            <Link className={uiLinkChip} href="/practices">
               一覧へ
             </Link>
-          </p>
+          </div>
           <h1 className="mt-2 text-2xl font-bold">{formatPracticeDate(session.practiceDate)}</h1>
           <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">メモ: {session.memo || "—"}</p>
         </div>
@@ -427,13 +428,13 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       ) : null}
 
       <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">的中（1立ち＝4射・〇×）</h2>
           {isAdmin ? (
             <button
               type="button"
               disabled={busy}
-              className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+              className={`${uiBtnPrimary} w-full shrink-0 justify-center sm:w-auto`}
               onClick={() => void saveMarks()}
             >
               記録を保存

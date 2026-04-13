@@ -1,14 +1,29 @@
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { DbConnectionBanner } from "@/components/DbConnectionBanner";
+import { publicDatabaseErrorMessage } from "@/lib/dbPageError";
 import { formatPracticeDate } from "@/lib/format";
+import { prisma } from "@/lib/prisma";
 import { readIsAdmin } from "@/lib/serverAdmin";
+import { uiLinkChip, uiLinkChipAccent } from "@/lib/uiButtons";
+import Link from "next/link";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export default async function PracticesPage() {
-  const isAdmin = await readIsAdmin();
-  const practices = await prisma.practiceSession.findMany({
-    orderBy: [{ practiceDate: "desc" }, { createdAt: "desc" }],
-    select: { id: true, practiceDate: true, memo: true },
-  });
+  let isAdmin = false;
+  let practices: { id: string; practiceDate: string; memo: string }[] = [];
+  let dbError: string | null = null;
+
+  try {
+    isAdmin = await readIsAdmin();
+    practices = await prisma.practiceSession.findMany({
+      orderBy: [{ practiceDate: "desc" }, { createdAt: "desc" }],
+      select: { id: true, practiceDate: true, memo: true },
+    });
+  } catch (e) {
+    console.error("[practices page]", e);
+    dbError = publicDatabaseErrorMessage(e);
+  }
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 px-4 py-10">
@@ -33,6 +48,8 @@ export default async function PracticesPage() {
         </p>
       </div>
 
+      {dbError ? <DbConnectionBanner message={dbError} /> : null}
+
       <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm">
         <table className="w-full text-left text-sm">
           <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
@@ -46,31 +63,26 @@ export default async function PracticesPage() {
             {practices.map((p) => (
               <tr key={p.id} className="border-t border-zinc-100">
                 <td className="px-4 py-3">
-                  <Link className="font-medium text-emerald-800 hover:underline" href={`/practices/${p.id}/marks`}>
+                  <Link className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
                     {formatPracticeDate(p.practiceDate)}
                   </Link>
                 </td>
                 <td className="whitespace-pre-wrap px-4 py-3 text-zinc-700">{p.memo || "—"}</td>
                 <td className="px-4 py-3">
                   {isAdmin ? (
-                    <div className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
-                      <Link className="font-medium text-indigo-800 underline" href={`/practices/${p.id}`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link className={uiLinkChip} href={`/practices/${p.id}`}>
                         出欠
                       </Link>
-                      <span className="text-zinc-300">|</span>
-                      <Link className="font-medium text-indigo-800 underline" href={`/practices/${p.id}/lineup`}>
+                      <Link className={uiLinkChip} href={`/practices/${p.id}/lineup`}>
                         チーム
                       </Link>
-                      <span className="text-zinc-300">|</span>
-                      <Link className="font-medium text-emerald-800 underline" href={`/practices/${p.id}/marks`}>
+                      <Link className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
                         的中
                       </Link>
                     </div>
                   ) : (
-                    <Link
-                      className="text-sm font-medium text-emerald-800 hover:underline"
-                      href={`/practices/${p.id}/marks`}
-                    >
+                    <Link className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
                       閲覧
                     </Link>
                   )}

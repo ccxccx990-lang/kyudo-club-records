@@ -73,8 +73,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "sessionKind は joint か match です" }, { status: 400 });
   }
 
-  const session = await prisma.practiceSession.create({
-    data: { practiceDate, memo, roundCount, maxMato, sessionKind },
-  });
-  return NextResponse.json({ session }, { status: 201 });
+  try {
+    const session = await prisma.practiceSession.create({
+      data: { practiceDate, memo, roundCount, maxMato, sessionKind },
+    });
+    return NextResponse.json({ session }, { status: 201 });
+  } catch (e) {
+    console.error("practiceSession.create", e);
+    return NextResponse.json(
+      {
+        error:
+          "データベースへの保存に失敗しました。Vercel ではローカル用の SQLite（file:…）は使えないことが多いです。PostgreSQL 等の DATABASE_URL を設定し、マイグレーションを実行してください。",
+      },
+      { status: 503 },
+    );
+  }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import type { PersonalHitRateRow } from "@/lib/personalHitRateReport";
+import { uiBtnAccent, uiToggleChoice } from "@/lib/uiButtons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const MONTH_OPTIONS = [
@@ -279,15 +280,13 @@ export function PersonalHitRateReportClient() {
         <div className="flex max-w-md flex-col gap-4">
           <div>
             <p className="mb-2 text-xs font-medium text-zinc-600">男女区分</p>
-            <div className="flex w-full rounded-lg border border-zinc-300 p-0.5">
+            <div className="flex w-full gap-0.5 rounded-lg border border-zinc-300 bg-zinc-50/80 p-0.5">
               {(["男", "女"] as const).map((g) => (
                 <button
                   key={g}
                   type="button"
                   onClick={() => setGender(g)}
-                  className={`min-h-[2.5rem] flex-1 rounded-md px-3 py-2 text-sm font-medium ${
-                    gender === g ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
-                  }`}
+                  className={`flex-1 justify-center ${uiToggleChoice(gender === g)}`}
                 >
                   {g === "男" ? "男子" : "女子"}
                 </button>
@@ -296,22 +295,18 @@ export function PersonalHitRateReportClient() {
           </div>
           <div>
             <p className="mb-2 text-xs font-medium text-zinc-600">期間</p>
-            <div className="flex w-full rounded-lg border border-zinc-300 p-0.5">
+            <div className="flex w-full gap-0.5 rounded-lg border border-zinc-300 bg-zinc-50/80 p-0.5">
               <button
                 type="button"
                 onClick={() => setPeriod("firstHalf")}
-                className={`min-h-[2.5rem] flex-1 rounded-md px-3 py-2 text-sm font-medium ${
-                  period === "firstHalf" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
-                }`}
+                className={`flex-1 justify-center ${uiToggleChoice(period === "firstHalf")}`}
               >
                 月前半
               </button>
               <button
                 type="button"
                 onClick={() => setPeriod("full")}
-                className={`min-h-[2.5rem] flex-1 rounded-md px-3 py-2 text-sm font-medium ${
-                  period === "full" ? "bg-emerald-600 text-white" : "text-zinc-700 hover:bg-zinc-50"
-                }`}
+                className={`flex-1 justify-center ${uiToggleChoice(period === "full")}`}
               >
                 月全て
               </button>
@@ -401,7 +396,7 @@ export function PersonalHitRateReportClient() {
             type="button"
             disabled={pdfBusy || loading}
             onClick={() => void downloadPdf()}
-            className="h-11 w-full shrink-0 rounded-lg bg-emerald-600 px-5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[11rem]"
+            className={`${uiBtnAccent} w-full shrink-0 justify-center sm:w-auto sm:min-w-[11rem]`}
           >
             {pdfBusy ? "PDF を作成中…" : "PDFをダウンロード"}
           </button>

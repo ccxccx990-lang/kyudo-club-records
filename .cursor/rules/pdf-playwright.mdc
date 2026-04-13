@@ -1,0 +1,12 @@
+---
+description: レポート系 PDF はサーバー Playwright で生成する（クライアント html2canvas 等は使わない）
+globs: src/app/reports/**/*,src/app/api/reports/**/*
+alwaysApply: true
+---
+
+# PDF 出力の方針（このリポジトリ）
+
+- **個人的中率**の「PDFをダウンロード」は、画面の `#hit-rate-pdf-vertical-wrap` の **HTML を `POST /api/reports/personal-hit-rate/pdf`** に送り、**Playwright（Chromium）の `page.pdf()`** でサーバー生成する。
+- **html2pdf.js / html2canvas / ブラウザのみの PDF ライブラリ**で同じことをしない（レイアウトずれ・色空間の問題を避ける）。
+- PDF では **背景は白ベース**（`printBackground: false` と CSS で帯・交互行の背景を打ち消す）。新規レポートを PDF 化するときも同パターン（API + Playwright）を踏襲する。
+- サーバーに Chromium が必要: `npx playwright install chromium`（`playwright` は `dependencies`）。

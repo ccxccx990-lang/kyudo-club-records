@@ -1,12 +1,17 @@
 // 弓道部：合同練習の的中記録（〇×）用スキーマ
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Vercel（Linux）上のクエリエンジンを確実に含める（ローカル開発は native のまま）
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
+// Supabase + Vercel: ランタイムは Transaction pooler（DATABASE_URL）、マイグレーションは DIRECT_URL
+// 直結1本だけの環境では両方に同じ URI を設定すればよい
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Member {

@@ -13,6 +13,7 @@ import {
   sortMembers,
   splitRoleSlots,
 } from "@/lib/memberFields";
+import { uiBtnMuted, uiBtnPrimary, uiBtnSmDanger, uiBtnSmSecondary } from "@/lib/uiButtons";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useEffect } from "react";
 
@@ -24,7 +25,12 @@ export type MemberRow = {
   role: string;
 };
 
-type Props = { initialMembers: MemberRow[]; isAdmin: boolean };
+type Props = {
+  initialMembers: MemberRow[];
+  isAdmin: boolean;
+  /** true のとき DB 読み込み失敗などで編集 UI を出さない（閲覧のみ） */
+  readOnlyDb?: boolean;
+};
 
 type RoleSlotPickerProps = {
   slots: string[];
@@ -72,21 +78,13 @@ function RoleSlotPicker({ slots, onSlotsChange, idPrefix, selectClassName }: Rol
             ))}
           </select>
           {slots.length > 1 ? (
-            <button
-              type="button"
-              className="shrink-0 rounded-md border border-zinc-300 px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50"
-              onClick={() => removeSlot(index)}
-            >
+            <button type="button" className={`${uiBtnSmSecondary} shrink-0`} onClick={() => removeSlot(index)}>
               この役職を削除
             </button>
           ) : null}
         </div>
       ))}
-      <button
-        type="button"
-        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-800 hover:bg-zinc-50"
-        onClick={() => addSlot()}
-      >
+      <button type="button" className={uiBtnSmSecondary} onClick={() => addSlot()}>
         役職追加
       </button>
     </div>
@@ -94,7 +92,8 @@ function RoleSlotPicker({ slots, onSlotsChange, idPrefix, selectClassName }: Rol
 }
 
 /** 部員一覧と追加・保存（管理者のみ操作可） */
-export function MembersManager({ initialMembers, isAdmin }: Props) {
+export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: Props) {
+  const canEdit = isAdmin && !readOnlyDb;
   const router = useRouter();
   const [rows, setRows] = useState<MemberRow[]>(initialMembers);
   const [newFamily, setNewFamily] = useState("");
@@ -125,12 +124,12 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
   const refresh = () => router.refresh();
 
   const patchRow = (id: string, patch: Partial<Omit<MemberRow, "id">>) => {
-    if (!isAdmin) return;
+    if (!canEdit) return;
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   };
 
   const add = async () => {
-    if (!isAdmin) return;
+    if (!canEdit) return;
     if (!newFamily.trim() || !newGiven.trim()) {
       setMsg("苗字と名前を入力してください");
       return;
@@ -167,7 +166,7 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
   };
 
   const saveAll = async () => {
-    if (!isAdmin) return;
+    if (!canEdit) return;
     for (const r of rows) {
       if (!isCompleteMemberDisplayName(r.name)) {
         setMsg("苗字と名前の両方が入っていない行があります。半角空白で区切った表示名に直してください。");
@@ -191,7 +190,7 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
   };
 
   const remove = async (id: string) => {
-    if (!isAdmin) return;
+    if (!canEdit) return;
     if (!confirm("この部員を削除しますか？関連する記録も消えます。")) return;
     setBusy(true);
     setMsg(null);
@@ -245,7 +244,7 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
     <div className="space-y-6">
       {msg ? <p className="text-sm text-red-700">{msg}</p> : null}
 
-      {isAdmin ? (
+      {canEdit ? (
         <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-zinc-900">部員を追加</h2>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -293,7 +292,7 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
             <button
               type="button"
               disabled={busy || !newFamily.trim() || !newGiven.trim() || !newGradeYear || !newGender}
-              className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+              className={uiBtnPrimary}
               onClick={() => void add()}
             >
               追加
@@ -304,7 +303,7 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
             <button
               type="button"
               disabled={busy || rows.length === 0}
-              className="rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-semibold text-indigo-900 hover:bg-indigo-100 disabled:opacity-50"
+              className={uiBtnMuted}
               onClick={() => void saveAll()}
             >
               一覧を保存
@@ -370,12 +369,12 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
               <th className="px-4 py-3">苗字</th>
               <th className="px-4 py-3">名前</th>
               <th className="px-4 py-3">役職</th>
-              {isAdmin ? <th className="px-4 py-3">操作</th> : null}
+              {canEdit ? <th className="px-4 py-3">操作</th> : null}
             </tr>
           </thead>
           <tbody>
             {displayRows.map((m) =>
-              isAdmin ? (
+              canEdit ? (
                 <tr key={m.id} className="border-t border-zinc-100">
                   <td className="px-4 py-2">{gradeSelect(m.gradeYear, (v) => patchRow(m.id, { gradeYear: v }))}</td>
                   <td className="px-4 py-2">{genderSelect(m.gender, (v) => patchRow(m.id, { gender: v }))}</td>
@@ -412,11 +411,7 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
                     />
                   </td>
                   <td className="px-4 py-2">
-                    <button
-                      type="button"
-                      className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-800 hover:bg-red-50"
-                      onClick={() => void remove(m.id)}
-                    >
+                    <button type="button" className={uiBtnSmDanger} onClick={() => void remove(m.id)}>
                       削除
                     </button>
                   </td>
@@ -437,9 +432,11 @@ export function MembersManager({ initialMembers, isAdmin }: Props) {
             )}
             {displayRows.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-zinc-500" colSpan={isAdmin ? 6 : 5}>
+                <td className="px-4 py-6 text-zinc-500" colSpan={canEdit ? 6 : 5}>
                   {rows.length === 0
-                    ? "部員がまだいません。管理者が追加してください。"
+                    ? readOnlyDb
+                      ? "一覧を読み込めませんでした。画面の上の案内を確認してください。"
+                      : "部員がまだいません。管理者が追加してください。"
                     : "条件に一致する部員がありません。"}
                 </td>
               </tr>

@@ -9,6 +9,7 @@ import {
   trimLineupSentinels,
   type MemberForPractice,
 } from "@/lib/practiceSessionPlan";
+import { uiBtnAccent, uiBtnDangerOutline, uiBtnPrimary } from "@/lib/uiButtons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -173,18 +174,26 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
             setLineupTeams={setLineupTeams}
             onTeamSizeChange={setTeamSize}
           />
-          <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-4">
+          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
               disabled={busy}
-              className="rounded-md bg-indigo-700 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+              className={`${uiBtnDangerOutline} w-full justify-center sm:w-auto`}
+              onClick={clearLineup}
+            >
+              チームをすべてクリア
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className={`${uiBtnPrimary} w-full justify-center sm:w-auto`}
               onClick={() => void saveLineup()}
             >
               チーム編成を保存
             </button>
             <Link
               href={`/practices/${session.id}/marks`}
-              className="inline-flex items-center rounded-md bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
+              className={`${uiBtnAccent} w-full justify-center sm:ml-auto sm:w-auto`}
               onClick={(e) => {
                 if (!hasUnsavedChanges) return;
                 if (!confirmDiscardIfNeeded()) e.preventDefault();
@@ -192,14 +201,6 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
             >
               的中入力へ →
             </Link>
-            <button
-              type="button"
-              disabled={busy}
-              className="ml-auto rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
-              onClick={clearLineup}
-            >
-              チームをすべてクリア
-            </button>
           </div>
           {planMsg ? <p className="text-sm text-red-700">{planMsg}</p> : null}
         </section>

@@ -1,6 +1,7 @@
 "use client";
 
 import { computeRoundPacking } from "@/lib/practiceRoundPacking";
+import { uiBtnSmDanger, uiBtnSmMuted, uiBtnSmSecondary, uiPill, uiPillSm } from "@/lib/uiButtons";
 import { roundNumberAfterMarker } from "@/lib/practiceSessionPlan";
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
@@ -126,16 +127,7 @@ export function PracticeLineupBuilder({
           <p className="text-xs font-semibold text-zinc-700">チーム人数（次に追加するチームへの詰め込み人数）</p>
           <div className="flex flex-wrap gap-1">
             {[1, 2, 3, 4, 5, 6].map((sz) => (
-              <button
-                key={sz}
-                type="button"
-                onClick={() => onTeamSizeChange(sz)}
-                className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                  teamSize === sz
-                    ? "border-indigo-600 bg-indigo-600 text-white"
-                    : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
-                }`}
-              >
+              <button key={sz} type="button" onClick={() => onTeamSizeChange(sz)} className={uiPill(teamSize === sz)}>
                 {sz}人
               </button>
             ))}
@@ -143,7 +135,7 @@ export function PracticeLineupBuilder({
           <button
             type="button"
             disabled={!canAppendNextRound}
-            className="w-full rounded-md border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-900 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${uiBtnSmMuted} w-full justify-center disabled:cursor-not-allowed`}
             onClick={appendNextRoundMarker}
           >
             次の立ちへ
@@ -186,11 +178,7 @@ export function PracticeLineupBuilder({
                 key={k}
                 type="button"
                 onClick={() => setCandidateGender(k)}
-                className={`rounded-full border px-2 py-0.5 text-xs ${
-                  candidateGender === k
-                    ? "border-indigo-600 bg-indigo-600 text-white"
-                    : "border-zinc-300 bg-white text-zinc-600"
-                }`}
+                className={uiPillSm(candidateGender === k)}
               >
                 {label}
               </button>
@@ -202,7 +190,7 @@ export function PracticeLineupBuilder({
                 key={m.id}
                 type="button"
                 onClick={() => addToLineup(m.id)}
-                className="flex w-full items-center gap-2 rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-left text-sm hover:bg-zinc-50"
+                className={`${uiBtnSmSecondary} h-auto min-h-10 w-full justify-start py-2 text-left text-sm font-normal`}
               >
                 <span className={m.gender === "女" ? "text-rose-600" : "text-sky-700"}>
                   {m.gender === "女" ? "女" : m.gender === "男" ? "男" : "—"}
@@ -255,7 +243,7 @@ export function PracticeLineupBuilder({
                           <span className="font-medium">{m?.name ?? mid}</span>
                           <button
                             type="button"
-                            className="ml-auto text-xs text-red-700 hover:underline"
+                            className={`${uiBtnSmDanger} ml-auto shrink-0`}
                             onClick={() => removeFromLineup(mid)}
                           >
                             外す

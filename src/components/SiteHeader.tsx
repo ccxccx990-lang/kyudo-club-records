@@ -1,5 +1,6 @@
 "use client";
 
+import { uiBtnHeader, uiBtnHeaderPrimary } from "@/lib/uiButtons";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -79,27 +80,20 @@ export function SiteHeader() {
             ) : null}
           </nav>
         </div>
-        <div className="flex items-center gap-2 text-sm">
+        <div className="flex flex-wrap items-center justify-end gap-2 text-sm">
           {admin === null ? (
             <span className="text-zinc-400">…</span>
           ) : admin ? (
             <>
-              <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-800">
+              <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-800">
                 管理者
               </span>
-              <button
-                type="button"
-                className="rounded-md border border-zinc-300 px-2 py-1 text-zinc-700 hover:bg-zinc-50"
-                onClick={() => void logout()}
-              >
+              <button type="button" className={uiBtnHeader} onClick={() => void logout()}>
                 ログアウト
               </button>
             </>
           ) : (
-            <Link
-              className="rounded-md bg-indigo-700 px-3 py-1.5 text-white hover:bg-indigo-800"
-              href="/admin/login"
-            >
+            <Link className={uiBtnHeaderPrimary} href="/admin/login">
               管理者ログイン
             </Link>
           )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { uiBtnPrimary } from "@/lib/uiButtons";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -54,7 +55,7 @@ export default function AdminLoginPage() {
         <button
           type="submit"
           disabled={busy || !password}
-          className="w-full rounded-md bg-indigo-700 py-2 text-sm font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+          className={`${uiBtnPrimary} w-full justify-center`}
         >
           {busy ? "確認中…" : "ログイン"}
         </button>

@@ -1,15 +1,30 @@
+import { DbConnectionBanner } from "@/components/DbConnectionBanner";
+import { publicDatabaseErrorMessage } from "@/lib/dbPageError";
 import { sortMembers } from "@/lib/memberFields";
 import { prisma } from "@/lib/prisma";
 import { readIsAdmin } from "@/lib/serverAdmin";
-import { MembersManager } from "./MembersManager";
+import { MembersManager, type MemberRow } from "./MembersManager";
+
+export const runtime = "nodejs";
+/** DB 接続失敗をキャッシュしない */
+export const dynamic = "force-dynamic";
 
 export default async function MembersPage() {
-  const isAdmin = await readIsAdmin();
-  const raw = await prisma.member.findMany({
-    orderBy: { createdAt: "asc" },
-    select: { id: true, name: true, gradeYear: true, gender: true, role: true },
-  });
-  const members = sortMembers(raw);
+  let isAdmin = false;
+  let members: MemberRow[] = [];
+  let dbError: string | null = null;
+
+  try {
+    isAdmin = await readIsAdmin();
+    const raw = await prisma.member.findMany({
+      orderBy: { createdAt: "asc" },
+      select: { id: true, name: true, gradeYear: true, gender: true, role: true },
+    });
+    members = sortMembers(raw);
+  } catch (e) {
+    console.error("[members page]", e);
+    dbError = publicDatabaseErrorMessage(e);
+  }
 
   return (
     <main className="mx-auto max-w-4xl space-y-6 px-4 py-10">
@@ -21,7 +36,8 @@ export default async function MembersPage() {
           できます。
         </p>
       </div>
-      <MembersManager initialMembers={members} isAdmin={isAdmin} />
+      {dbError ? <DbConnectionBanner message={dbError} /> : null}
+      <MembersManager initialMembers={members} isAdmin={isAdmin} readOnlyDb={Boolean(dbError)} />
     </main>
   );
 }
