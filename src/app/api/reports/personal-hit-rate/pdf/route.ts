@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
+import Chromium from "@sparticuz/chromium";
+import type { Browser } from "puppeteer-core";
+import puppeteer from "puppeteer-core";
 
 export const runtime = "nodejs";
-
-/** Vercel 本番: ブラウザを node_modules 配下に同梱する（ビルド時 install とセット） */
-if (process.env.VERCEL === "1" && process.env.PLAYWRIGHT_BROWSERS_PATH == null) {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = "0";
-}
 
 /** クライアントが送る HTML 断片の上限（悪用防止） */
 const MAX_HTML_CHARS = 2_500_000;
@@ -43,9 +41,35 @@ function wrapPrintHtml(fragment: string): string {
 </html>`;
 }
 
+/** Vercel: 軽量 Chromium（@sparticuz/chromium）。ローカル: インストール済み Chrome。 */
+async function launchPdfBrowser(): Promise<Browser> {
+  if (process.env.VERCEL === "1") {
+    Chromium.setGraphicsMode = false;
+    const executablePath = await Chromium.executablePath();
+    return puppeteer.launch({
+      args: puppeteer.defaultArgs({ args: Chromium.args, headless: "shell" }),
+      defaultViewport: {
+        width: 1200,
+        height: 2000,
+        deviceScaleFactor: 1,
+        hasTouch: false,
+        isLandscape: false,
+        isMobile: false,
+      },
+      executablePath,
+      headless: "shell",
+    });
+  }
+  return puppeteer.launch({
+    channel: "chrome",
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
+}
+
 /**
  * 個人的中率: クライアントが描画した `#hit-rate-pdf-vertical-wrap` の outerHTML を受け取り、
- * Playwright（Chromium）で PDF 化する。
+ * サーバーで headless Chromium（Vercel では @sparticuz/chromium）により PDF 化する。
  */
 export async function POST(req: Request) {
   let body: unknown;
@@ -67,18 +91,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "html が大きすぎます" }, { status: 413 });
   }
 
-  const { chromium } = await import("playwright");
-  let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
+  let browser: Browser | undefined;
   try {
-    browser = await chromium.launch({
-      headless: true,
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--single-process",
-      ],
-    });
+    browser = await launchPdfBrowser();
     const page = await browser.newPage();
     const doc = wrapPrintHtml(html);
     await page.setContent(doc, { waitUntil: "load", timeout: 30_000 });
@@ -89,7 +104,6 @@ export async function POST(req: Request) {
 
     const pdf = await page.pdf({
       format: "A4",
-      /* 帯・交互行などの背景色を PDF に載せない（紙面は白ベース、罫線・文字はそのまま） */
       printBackground: false,
       margin: { top: "5mm", right: "6mm", bottom: "6mm", left: "6mm" },
     });
@@ -105,7 +119,7 @@ export async function POST(req: Request) {
     console.error("[personal-hit-rate/pdf]", e);
     return NextResponse.json(
       {
-        error: `PDF の生成に失敗しました: ${msg}。サーバーに Chromium が入っているか（npx playwright install chromium）、ネットワークで Google Fonts に届くか確認してください。`,
+        error: `PDF の生成に失敗しました: ${msg}。本番はサーバーレス用 Chromium を使用しています。ローカルでは Google Chrome のインストールが必要です。Google Fonts に届かないと文字化けすることがあります。`,
       },
       { status: 500 },
     );

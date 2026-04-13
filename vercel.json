@@ -1,8 +1,3 @@
 {
-  "build": {
-    "env": {
-      "PLAYWRIGHT_BROWSERS_PATH": "0"
-    }
-  },
-  "buildCommand": "prisma generate && npx playwright install chromium && next build"
+  "buildCommand": "prisma generate && next build"
 }

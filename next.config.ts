@@ -1,12 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@prisma/client", "playwright", "playwright-core"],
-  /** Vercel: PLAYWRIGHT_BROWSERS_PATH=0 で入った Chromium を PDF API の関数バンドルに含める */
+  serverExternalPackages: ["@prisma/client", "puppeteer-core", "@sparticuz/chromium"],
+  /** Vercel: @sparticuz/chromium の brotli バイナリを PDF API に同梱 */
   outputFileTracingIncludes: {
-    "/api/reports/personal-hit-rate/pdf": [
-      "./node_modules/playwright-core/.local-browsers/**/*",
-    ],
+    "/api/reports/personal-hit-rate/pdf": ["./node_modules/@sparticuz/chromium/**/*"],
   },
 };
 
