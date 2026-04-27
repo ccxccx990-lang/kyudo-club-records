@@ -133,6 +133,29 @@ function MarksTotalsHeaderSpacer({ tone }: { tone: "zinc" | "amber" }) {
   return <div className={`${MARKS_TOTAL_COL_CLASS} min-h-8 ${skin}`} aria-hidden />;
 }
 
+function splitDisplayName(name: string): { familyName: string; givenInitial: string } {
+  const [familyName = name, givenName = ""] = name.trim().split(/\s+/, 2);
+  return { familyName, givenInitial: givenName.charAt(0) };
+}
+
+function SubstitutionNameMarker({
+  name,
+  baseName,
+}: {
+  name: string;
+  baseName: string;
+}) {
+  const sub = splitDisplayName(name);
+  const base = splitDisplayName(baseName);
+  const needsInitial = sub.familyName === base.familyName && sub.givenInitial.length > 0;
+  return (
+    <div className="flex min-h-7 shrink-0 flex-col items-center justify-center border-l-2 border-l-indigo-700 bg-indigo-50 px-1 text-[0.68rem] font-bold leading-none text-indigo-900 sm:min-h-8">
+      <span className="[writing-mode:vertical-rl]">{sub.familyName}</span>
+      {needsInitial ? <span className="mt-1 text-[0.6rem]">({sub.givenInitial})</span> : null}
+    </div>
+  );
+}
+
 /** 部員行の右端 〇の数／入力枠の総マス（立目×4） */
 function MarksMemberTotalsCell({
   memberId,
@@ -167,6 +190,7 @@ function MarksMemberTotalsCell({
 /** 名前列＋立目ブロックをチーム枠内で中央寄せ */
 function MarksMemberMarksRow({
   memberId,
+  baseName,
   label,
   rounds,
   grid,
@@ -174,9 +198,11 @@ function MarksMemberMarksRow({
   cycle,
   variant,
   effectiveMemberIdForRound,
+  substitutionMarkerNameForRound,
   hideTopBorder,
 }: {
   memberId: string;
+  baseName: string;
   label: ReactNode;
   rounds: number[];
   grid: Record<string, Shot[]>;
@@ -184,6 +210,7 @@ function MarksMemberMarksRow({
   cycle: (memberId: string, roundIndex: number, shotIdx: number) => void;
   variant: "zinc" | "amber";
   effectiveMemberIdForRound: (memberId: string, roundIndex: number) => string;
+  substitutionMarkerNameForRound: (memberId: string, roundIndex: number) => string | null;
   hideTopBorder?: boolean;
 }) {
   const rowBorder =
@@ -196,16 +223,19 @@ function MarksMemberMarksRow({
         <div className="inline-flex max-w-full flex-nowrap items-stretch justify-center gap-0">
           {rounds.map((r) => {
             const effectiveMemberId = effectiveMemberIdForRound(memberId, r);
+            const markerName = substitutionMarkerNameForRound(memberId, r);
             const k = cellKey(effectiveMemberId, r);
             const slots = grid[k] ?? [null, null, null, null];
             return (
-              <MarksRoundShotGrid
-                key={r}
-                roundIndex={r}
-                slots={slots}
-                isAdmin={isAdmin}
-                onCycle={(idx) => cycle(effectiveMemberId, r, idx)}
-              />
+              <div key={r} className="inline-flex items-stretch">
+                {markerName ? <SubstitutionNameMarker name={markerName} baseName={baseName} /> : null}
+                <MarksRoundShotGrid
+                  roundIndex={r}
+                  slots={slots}
+                  isAdmin={isAdmin}
+                  onCycle={(idx) => cycle(effectiveMemberId, r, idx)}
+                />
+              </div>
             );
           })}
         </div>
@@ -356,22 +386,20 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       for (const sub of substitutions) {
         if (roundIndex < sub.roundIndex) continue;
         if (current === sub.outMemberId) current = sub.inMemberId;
-        else if (current === sub.inMemberId) current = sub.outMemberId;
       }
       return current;
     },
     [substitutions],
   );
 
-  const substitutionNotesForMember = useCallback(
-    (memberId: string): string[] =>
-      substitutions
-        .filter((s) => s.outMemberId === memberId || s.inMemberId === memberId)
-        .map((s) => {
-          const nextMemberId = s.outMemberId === memberId ? s.inMemberId : s.outMemberId;
-          return `${s.roundIndex}立目〜 ${memberById.get(nextMemberId)?.name ?? nextMemberId}`;
-        }),
-    [memberById, substitutions],
+  const substitutionMarkerNameForRound = useCallback(
+    (memberId: string, roundIndex: number): string | null => {
+      const current = effectiveMemberIdForRound(memberId, roundIndex);
+      const prev = roundIndex > 1 ? effectiveMemberIdForRound(memberId, roundIndex - 1) : memberId;
+      if (current === prev) return null;
+      return memberById.get(current)?.name ?? current;
+    },
+    [effectiveMemberIdForRound, memberById],
   );
 
   const replacementCandidates = useMemo(() => {
@@ -498,13 +526,18 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       }
     }
 
+    const relevantMemberIds = new Set(orderedIds);
+    for (const sub of substitutions) {
+      relevantMemberIds.add(sub.outMemberId);
+      relevantMemberIds.add(sub.inMemberId);
+    }
     for (const savedKey of savedKeys) {
       if (producedKeys.has(savedKey)) continue;
       const splitAt = savedKey.lastIndexOf("-");
       if (splitAt <= 0) continue;
       const memberId = savedKey.slice(0, splitAt);
       const roundIndex = Number(savedKey.slice(splitAt + 1));
-      if (!orderedIds.includes(memberId) || !Number.isFinite(roundIndex)) continue;
+      if (!relevantMemberIds.has(memberId) || !Number.isFinite(roundIndex)) continue;
       clears.push({ memberId, roundIndex });
     }
 
@@ -583,31 +616,6 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
           ) : null}
         </div>
         {marksMsg ? <p className="text-sm text-red-700">{marksMsg}</p> : null}
-        {substitutions.length > 0 ? (
-          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-xs text-indigo-950">
-            <p className="font-semibold">交代</p>
-            <ul className="mt-1 space-y-1">
-              {substitutions.map((s) => (
-                <li key={`${s.roundIndex}-${s.outMemberId}-${s.inMemberId}`} className="flex flex-wrap items-center gap-2">
-                  <span>
-                    {s.roundIndex}立目〜 {memberById.get(s.outMemberId)?.name ?? s.outMemberId} ⇄{" "}
-                    {memberById.get(s.inMemberId)?.name ?? s.inMemberId}
-                  </span>
-                  {isAdmin ? (
-                    <button
-                      type="button"
-                      className={uiBtnSmDanger}
-                      disabled={busy}
-                      onClick={() => void removeSubstitution(s)}
-                    >
-                      削除
-                    </button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
         <p className="text-sm text-zinc-600">
           {useLineupPreviewLayout
             ? isSyntheticLineupPreview
@@ -653,17 +661,13 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                             <MarksMemberMarksRow
                               key={mid}
                               memberId={m.id}
+                              baseName={m.name}
                               label={
                                 <>
                                   <span className="mr-1 text-xs text-zinc-500">
                                     {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
                                   </span>
                                   {m.name}
-                                  {substitutionNotesForMember(m.id).map((note) => (
-                                    <span key={note} className="mt-0.5 block text-[0.68rem] font-normal text-indigo-700">
-                                      {note}
-                                    </span>
-                                  ))}
                                 </>
                               }
                               rounds={rounds}
@@ -672,6 +676,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                               cycle={cycle}
                               variant="zinc"
                               effectiveMemberIdForRound={effectiveMemberIdForRound}
+                              substitutionMarkerNameForRound={substitutionMarkerNameForRound}
                             />
                           );
                         })}
@@ -699,17 +704,13 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                       <MarksMemberMarksRow
                         key={m.id}
                         memberId={m.id}
+                        baseName={m.name}
                         label={
                           <>
                             <span className="mr-1 text-xs text-zinc-500">
                               {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
                             </span>
                             {m.name}
-                            {substitutionNotesForMember(m.id).map((note) => (
-                              <span key={note} className="mt-0.5 block text-[0.68rem] font-normal text-indigo-700">
-                                {note}
-                              </span>
-                            ))}
                           </>
                         }
                         rounds={rounds}
@@ -718,6 +719,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                         cycle={cycle}
                         variant="amber"
                         effectiveMemberIdForRound={effectiveMemberIdForRound}
+                        substitutionMarkerNameForRound={substitutionMarkerNameForRound}
                         hideTopBorder={mi === 0}
                       />
                     ))}
@@ -741,17 +743,13 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                 <MarksMemberMarksRow
                   key={m.id}
                   memberId={m.id}
+                  baseName={m.name}
                   label={
                     <>
                       <span className="mr-1 text-xs text-zinc-500">
                         {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
                       </span>
                       {m.name}
-                      {substitutionNotesForMember(m.id).map((note) => (
-                        <span key={note} className="mt-0.5 block text-[0.68rem] font-normal text-indigo-700">
-                          {note}
-                        </span>
-                      ))}
                     </>
                   }
                   rounds={rounds}
@@ -760,12 +758,38 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                   cycle={cycle}
                   variant="zinc"
                   effectiveMemberIdForRound={effectiveMemberIdForRound}
+                  substitutionMarkerNameForRound={substitutionMarkerNameForRound}
                   hideTopBorder={mi === 0}
                 />
               ))}
             </div>
           )}
         </div>
+        {substitutions.length > 0 ? (
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-xs text-indigo-950">
+            <p className="font-semibold">交代一覧</p>
+            <ul className="mt-1 space-y-1">
+              {substitutions.map((s) => (
+                <li key={`${s.roundIndex}-${s.outMemberId}-${s.inMemberId}`} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {s.roundIndex}立目〜 {memberById.get(s.outMemberId)?.name ?? s.outMemberId} →{" "}
+                    {memberById.get(s.inMemberId)?.name ?? s.inMemberId}
+                  </span>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className={uiBtnSmDanger}
+                      disabled={busy}
+                      onClick={() => void removeSubstitution(s)}
+                    >
+                      削除
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
       {substitutionDialogOpen ? (
         <div
@@ -784,7 +808,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
               メンバー交代
             </h3>
             <p className="mt-2 text-xs text-zinc-500">
-              指定した立目以降で、選択した2人の表示位置と的中の保存先を入れ替えます。
+              指定した立目以降で、交代元の枠に交代後メンバーを表示し、的中も交代後メンバーに保存します。
               {session.sessionKind === "match"
                 ? " 試合では、交代先はチーム未割当の出席者から選びます。"
                 : " 正規練習では、交代先は出席者全員から選べます。"}
