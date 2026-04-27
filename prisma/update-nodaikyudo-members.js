@@ -68,10 +68,10 @@ const members = [
 ];
 
 const gradeRank = new Map([
-  ["1年", 0],
-  ["2年", 1],
-  ["3年", 2],
-  ["4年", 3],
+  ["4年", 0],
+  ["3年", 1],
+  ["2年", 2],
+  ["1年", 3],
 ]);
 
 function genderRank(gender) {
