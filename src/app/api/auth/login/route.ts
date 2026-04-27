@@ -6,7 +6,7 @@ import {
   verifyAdminPassword,
 } from "@/lib/auth";
 
-/** 管理者ログイン（合言葉を検証してクッキーをセット） */
+/** 管理者ログイン（パスワードを検証してクッキーをセット） */
 export async function POST(req: Request) {
   let body: unknown;
   try {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
       : "";
 
   if (!verifyAdminPassword(password)) {
-    return NextResponse.json({ error: "合言葉が違います" }, { status: 401 });
+    return NextResponse.json({ error: "パスワードが違います" }, { status: 401 });
   }
 
   try {

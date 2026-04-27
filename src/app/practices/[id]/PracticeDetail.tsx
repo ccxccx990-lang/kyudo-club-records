@@ -44,7 +44,7 @@ type Props = {
   isAdmin: boolean;
 };
 
-/** 合同練習の詳細・参加区分・出席（チーム編成は /lineup） */
+/** 正規練習の詳細・参加区分・出席（チーム編成は /lineup） */
 export function PracticeDetail({ session, members, isAdmin }: Props) {
   const router = useRouter();
 
@@ -174,7 +174,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
       );
       if (!ok) return;
     }
-    if (!window.confirm("この合同練習をまるごと削除しますか？記録もすべて消えます。")) return;
+    if (!window.confirm("この正規練習をまるごと削除しますか？記録もすべて消えます。")) return;
     setBusy(true);
     setPlanMsg(null);
     const res = await fetch(`/api/practices/${session.id}`, { method: "DELETE" });

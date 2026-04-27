@@ -13,7 +13,7 @@ export default async function HomePage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">的中ログ</h1>
         <p className="text-zinc-600">
-          大学弓道部向けの、部員管理と<strong>合同練習</strong>（男子・女子の同時練習）の的中記録です。
+          大学弓道部向けの、部員管理と<strong>正規練習</strong>（男子・女子の同時練習）の的中記録です。
           代表端末（PC や iPad）から、1立ち（4射）を<strong>〇×</strong>で入力します。
         </p>
       </div>
@@ -23,7 +23,7 @@ export default async function HomePage() {
       >
         <li className="min-h-0">
           <Link className={homeNavTileClass} href="/practices">
-            <div className="text-xs font-semibold leading-tight text-indigo-800">合同練習</div>
+            <div className="text-xs font-semibold leading-tight text-indigo-800">正規練習</div>
             <div className="mt-0.5 text-xs leading-snug text-zinc-600">一覧・閲覧</div>
           </Link>
         </li>
@@ -44,7 +44,7 @@ export default async function HomePage() {
             <Link className={homeNavTileClass} href="/practices/input">
               <div className="text-xs font-semibold leading-tight text-indigo-800">練習入力</div>
               <div className="mt-0.5 text-xs leading-snug text-zinc-600">
-                合同練習の作成・出席・チーム・的中
+                正規練習の作成・出席・チーム・的中
               </div>
             </Link>
           </li>

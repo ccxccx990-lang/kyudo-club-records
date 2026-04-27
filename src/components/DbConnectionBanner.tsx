@@ -19,7 +19,7 @@ export function DbConnectionFailPage({ message }: { message: string }) {
       <DbConnectionBanner message={message} />
       <p className="text-sm text-zinc-600">
         <Link className="font-medium text-indigo-800 underline" href="/practices">
-          合同練習一覧へ
+          正規練習一覧へ
         </Link>
       </p>
     </main>

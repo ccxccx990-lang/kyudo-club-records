@@ -44,7 +44,7 @@ export function SiteHeader() {
               }
               href="/practices"
             >
-              合同練習
+              正規練習
             </Link>
             <Link
               className={

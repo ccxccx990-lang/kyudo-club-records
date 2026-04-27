@@ -34,15 +34,11 @@ export default function AdminLoginPage() {
     <main className="mx-auto max-w-md space-y-6 px-4 py-12">
       <div>
         <h1 className="text-xl font-bold">管理者ログイン</h1>
-        <p className="mt-2 text-sm text-zinc-600">
-          編集用の合言葉を入力してください（環境変数 <code className="text-xs">ADMIN_PASSWORD</code>{" "}
-          に設定した値）。
-        </p>
       </div>
 
       <form onSubmit={(e) => void submit(e)} className="space-y-4 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
         <label className="block space-y-1 text-sm font-medium text-zinc-800">
-          合言葉
+          パスワード
           <input
             type="password"
             autoComplete="current-password"

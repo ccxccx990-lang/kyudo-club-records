@@ -28,7 +28,7 @@ export default async function PracticesPage() {
   return (
     <main className="mx-auto max-w-4xl space-y-6 px-4 py-10">
       <div>
-        <h1 className="text-2xl font-bold">合同練習</h1>
+        <h1 className="text-2xl font-bold">正規練習</h1>
         <p className="mt-2 text-sm text-zinc-600">
           {isAdmin ? (
             <>
@@ -93,8 +93,8 @@ export default async function PracticesPage() {
               <tr>
                 <td className="px-4 py-8 text-center text-zinc-500" colSpan={3}>
                   {isAdmin
-                    ? "まだ合同練習がありません。「練習入力」から追加できます。"
-                    : "まだ合同練習がありません。管理者が追加してください。"}
+                    ? "まだ正規練習がありません。「練習入力」から追加できます。"
+                    : "まだ正規練習がありません。管理者が追加してください。"}
                 </td>
               </tr>
             ) : null}

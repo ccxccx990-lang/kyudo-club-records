@@ -25,7 +25,7 @@ type Kind = "all" | "joint" | "match";
 
 const KIND_OPTIONS: { value: Kind; label: string }[] = [
   { value: "all", label: "全て" },
-  { value: "joint", label: "合同練習のみ" },
+  { value: "joint", label: "正規練習のみ" },
   { value: "match", label: "試合のみ" },
 ];
 

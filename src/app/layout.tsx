@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "弓道部 — 的中ログ",
-  description: "部員管理と合同練習の的中（〇×）記録",
+  description: "部員管理と正規練習の的中（〇×）記録",
 };
 
 /** Chrome / Edge / Safari の UI 色（アドレスバー周り）をライトに固定 */

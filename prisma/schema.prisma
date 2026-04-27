@@ -1,4 +1,4 @@
-// 弓道部：合同練習の的中記録（〇×）用スキーマ
+// 弓道部：正規練習の的中記録（〇×）用スキーマ
 
 generator client {
   provider      = "prisma-client-js"
@@ -29,7 +29,7 @@ model PracticeSession {
   id         String   @id @default(cuid())
   practiceDate String // YYYY-MM-DD（タイムゾーンずれ防止のため文字列で保持）
   memo       String   @default("")
-  sessionKind String @default("joint") // joint=合同練習, match=試合
+  sessionKind String @default("joint") // joint=正規練習, match=試合
   roundCount Int      @default(5)
   // 参加対象: all=男女合同, 男=男子のみ, 女=女子のみ
   genderScope     String   @default("all")

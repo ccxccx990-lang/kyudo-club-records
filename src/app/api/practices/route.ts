@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/http";
 import { isIsoDate } from "@/lib/dates";
 
-/** 合同練習の一覧（閲覧は誰でも可） */
+/** 正規練習の一覧（閲覧は誰でも可） */
 export async function GET() {
   const practices = await prisma.practiceSession.findMany({
     orderBy: [{ practiceDate: "desc" }, { createdAt: "desc" }],
@@ -11,7 +11,7 @@ export async function GET() {
   return NextResponse.json({ practices });
 }
 
-/** 合同練習の新規作成（管理者のみ） */
+/** 正規練習の新規作成（管理者のみ） */
 export async function POST(req: Request) {
   const denied = await requireAdmin();
   if (denied) return denied;

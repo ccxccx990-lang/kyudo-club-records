@@ -1,6 +1,6 @@
-# kyudo-club-records — 的中ログ（合同練習の〇×記録）
+# kyudo-club-records — 的中ログ（正規練習の〇×記録）
 
-大学弓道部向けの小さな Web アプリ。部員管理と、**合同練習**（男子・女子の同時練習）ごとの **1立ち＝4射の〇×記録** を扱う。
+大学弓道部向けの小さな Web アプリ。部員管理と、**正規練習**（男子・女子の同時練習）ごとの **1立ち＝4射の〇×記録** を扱う。
 
 **SQLite で手元だけ動かす用**のコピーは、同階層の **`kyudo-club-records-sqlite`** を参照（このフォルダは PostgreSQL / Supabase 想定）。
 
@@ -12,7 +12,7 @@
 4. 起動: `npm run dev` → ブラウザで `http://localhost:3000`
 
 - **一般部員**: URL を開いて閲覧のみ（一覧・記録の閲覧）
-- **管理者**: 右上「管理者ログイン」→ 合言葉（`ADMIN_PASSWORD`）でログインすると、部員追加・練習の作成・記録の編集ができる
+- **管理者**: 右上「管理者ログイン」→ パスワード（`ADMIN_PASSWORD`）でログインすると、部員追加・練習の作成・記録の編集ができる
 - **部員**: 名前に加え **学年**・**役職** を保存できる。表を編集したあと **一覧を一括で保存** で反映する
 
 ## コマンド一覧
@@ -36,7 +36,7 @@ kyudo-club-records/
 │   ├── app/
 │   │   ├── api/…          # REST API（認可は管理者クッキー）
 │   │   ├── members/       # 部員一覧
-│   │   ├── practices/     # 合同練習一覧・詳細
+│   │   ├── practices/     # 正規練習一覧・詳細
 │   │   └── admin/login/   # 管理者ログイン
 │   ├── components/
 │   └── lib/               # prisma, auth, marks など
@@ -57,7 +57,7 @@ kyudo-club-records/
 
 - Next.js（App Router）+ TypeScript + Tailwind CSS
 - **PostgreSQL** + Prisma 5（例: **Supabase**）。`DATABASE_URL`（プール）と `DIRECT_URL`（マイグレーション用）を設定する。Vercel 本番は Supabase **Transaction pooler（6543）** を `DATABASE_URL` に使うと IPv4 からも繋がりやすい。Vercel では `vercel.json` で `prisma migrate deploy` を実行する
-- 管理者は **httpOnly クッキー**（`SESSION_SECRET` で署名）＋合言葉 `ADMIN_PASSWORD`
+- 管理者は **httpOnly クッキー**（`SESSION_SECRET` で署名）＋パスワード `ADMIN_PASSWORD`
 - **個人的中率の PDF**: クライアントの `#hit-rate-pdf-vertical-wrap` の HTML を **`POST /api/reports/personal-hit-rate/pdf`** に送り、**サーバーで Playwright（Chromium）** が `page.pdf()` する。クライアントの html2canvas 系は使わない。初回・本番イメージでは **`npx playwright install chromium`** が必要。別レポートを PDF 化するときも同様の API + Playwright パターンを推奨（エージェント向け詳細は `.cursor/rules/pdf-playwright.mdc`）。
 
 ## よくあるエラーと対処

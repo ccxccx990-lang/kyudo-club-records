@@ -46,7 +46,7 @@ function ymdSlashOrIsoToIso(s: string): string | null {
   return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
-/** 合同練習の新規作成フォーム（管理者のみ表示） */
+/** 正規練習の新規作成フォーム（管理者のみ表示） */
 export function NewPracticeForm() {
   const router = useRouter();
   const today = new Date();
@@ -98,7 +98,7 @@ export function NewPracticeForm() {
       onSubmit={(e) => void submit(e)}
       className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
     >
-      <h2 className="text-sm font-semibold text-zinc-900">合同練習を追加</h2>
+      <h2 className="text-sm font-semibold text-zinc-900">正規練習を追加</h2>
       <div className="space-y-3">
         <div className={fieldHalf}>
           <span className="block">練習日</span>
@@ -158,7 +158,7 @@ export function NewPracticeForm() {
             value={sessionKind}
             onChange={(e) => setSessionKind(e.target.value === "match" ? "match" : "joint")}
           >
-            <option value="joint">合同練習</option>
+            <option value="joint">正規練習</option>
             <option value="match">試合</option>
           </select>
         </label>

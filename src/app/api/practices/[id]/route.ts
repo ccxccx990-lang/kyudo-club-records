@@ -16,7 +16,7 @@ import { isIsoDate } from "@/lib/dates";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-/** 1件の合同練習＋部員＋記録（閲覧は誰でも可） */
+/** 1件の正規練習＋部員＋記録（閲覧は誰でも可） */
 export async function GET(_req: Request, ctx: Ctx) {
   const { id } = await ctx.params;
 
@@ -48,7 +48,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   });
 }
 
-/** 合同練習の更新（管理者のみ） */
+/** 正規練習の更新（管理者のみ） */
 export async function PATCH(req: Request, ctx: Ctx) {
   const denied = await requireAdmin();
   if (denied) return denied;
@@ -253,7 +253,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-/** 合同練習の削除（管理者のみ） */
+/** 正規練習の削除（管理者のみ） */
 export async function DELETE(_req: Request, ctx: Ctx) {
   const denied = await requireAdmin();
   if (denied) return denied;
