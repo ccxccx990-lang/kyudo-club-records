@@ -16,7 +16,6 @@ import {
   uiBtnAccent,
   uiBtnDangerOutline,
   uiBtnDangerSolid,
-  uiBtnPrimary,
   uiBtnSecondary,
   uiLinkChip,
   uiToggleChoice,
@@ -131,15 +130,6 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
     return true;
   };
 
-  const savePlan = async () => {
-    if (!isAdmin) return;
-    setBusy(true);
-    setPlanMsg(null);
-    const ok = await saveAttendanceToServer();
-    setBusy(false);
-    if (ok) router.refresh();
-  };
-
   /** チーム編成ページへ。未保存の参加区分・出席があれば先に保存（サーバー側でチーム・的中もクリアされる） */
   const navigateToLineup = async (e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
@@ -228,7 +218,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
           role="status"
           className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950"
         >
-          未保存の変更があります。離れる前に「参加区分・出席を保存」を押してください。
+          未保存の変更があります。「チーム編成へ」を押すと保存して次のページに進みます。
         </div>
       ) : null}
 
@@ -244,7 +234,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
             >
               次のページ
             </Link>
-            です。「参加区分・出席を保存」または「チーム編成（1〜6人）へ」で保存すると、
+            です。「チーム編成へ」で保存して次のページに進みます。保存すると、
             <strong className="text-zinc-800">既存のチーム編成と的中記録はすべてクリア</strong>
             されます。
           </p>
@@ -303,20 +293,12 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
             >
               この練習を削除
             </button>
-            <button
-              type="button"
-              disabled={busy}
-              className={`${uiBtnPrimary} w-full justify-center sm:w-auto`}
-              onClick={() => void savePlan()}
-            >
-              参加区分・出席を保存
-            </button>
             <Link
               href={`/practices/${session.id}/lineup`}
               className={`${uiBtnSecondary} w-full justify-center sm:ml-auto sm:w-auto`}
               onClick={navigateToLineup}
             >
-              チーム編成（1〜6人）へ →
+              チーム編成へ →
             </Link>
           </div>
           {planMsg ? <p className="mt-2 text-sm text-red-700">{planMsg}</p> : null}

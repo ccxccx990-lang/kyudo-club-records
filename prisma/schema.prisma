@@ -37,6 +37,8 @@ model PracticeSession {
   attendanceJson  String   @default("{}")
   // lineupTeamsJson: チーム配列。[] のときは出席者を学年順で並べる
   lineupTeamsJson String   @default("[]")
+  // substitutionsJson: [{ roundIndex, outMemberId, inMemberId }]。指定立目以降の交代
+  substitutionsJson String @default("[]")
   teamSize        Int      @default(4)
   maxMato         Int      @default(8)
   createdAt  DateTime @default(now())

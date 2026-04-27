@@ -2,6 +2,11 @@ import { sortMembers } from "@/lib/memberFields";
 
 export type GenderScope = "all" | "男" | "女";
 export type AttendanceState = "present" | "absent";
+export type PracticeSubstitution = {
+  roundIndex: number;
+  outMemberId: string;
+  inMemberId: string;
+};
 
 export type MemberForPractice = {
   id: string;
@@ -52,6 +57,33 @@ export function parseLineupTeamsJson(raw: string): string[][] {
       teams.push(ids.length > 0 ? ids : []);
     }
     return teams;
+  } catch {
+    return [];
+  }
+}
+
+export function parseSubstitutionsJson(raw: string): PracticeSubstitution[] {
+  try {
+    const o = JSON.parse(raw) as unknown;
+    if (!Array.isArray(o)) return [];
+    const substitutions: PracticeSubstitution[] = [];
+    for (const item of o) {
+      if (typeof item !== "object" || item === null) continue;
+      const row = item as {
+        roundIndex?: unknown;
+        outMemberId?: unknown;
+        inMemberId?: unknown;
+      };
+      const roundIndex = typeof row.roundIndex === "number" ? row.roundIndex : Number(row.roundIndex);
+      const outMemberId = typeof row.outMemberId === "string" ? row.outMemberId : "";
+      const inMemberId = typeof row.inMemberId === "string" ? row.inMemberId : "";
+      const ri = Math.floor(roundIndex);
+      if (!Number.isFinite(roundIndex) || ri < 1 || !outMemberId || !inMemberId || outMemberId === inMemberId) {
+        continue;
+      }
+      substitutions.push({ roundIndex: ri, outMemberId, inMemberId });
+    }
+    return substitutions.sort((a, b) => a.roundIndex - b.roundIndex);
   } catch {
     return [];
   }
@@ -267,4 +299,14 @@ export function stableAttendanceJson(att: Record<string, AttendanceState>): stri
 
 export function stringifyLineupTeams(teams: string[][]): string {
   return JSON.stringify(teams);
+}
+
+export function stringifySubstitutions(substitutions: readonly PracticeSubstitution[]): string {
+  return JSON.stringify(
+    substitutions.map((s) => ({
+      roundIndex: s.roundIndex,
+      outMemberId: s.outMemberId,
+      inMemberId: s.inMemberId,
+    })),
+  );
 }

@@ -199,9 +199,11 @@ export function NewPracticeForm() {
         </div>
       </div>
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
-      <button type="submit" disabled={busy} className={`${uiBtnPrimary} w-full max-w-md justify-center sm:w-auto`}>
-        {busy ? "作成中…" : "作成して記録へ"}
-      </button>
+      <div className="flex justify-end">
+        <button type="submit" disabled={busy} className={`${uiBtnPrimary} w-full max-w-md justify-center sm:w-auto`}>
+          {busy ? "作成中…" : "作成して記録へ"}
+        </button>
+      </div>
     </form>
   );
 }

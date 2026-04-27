@@ -288,7 +288,7 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
               </span>
             </label>
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap justify-end gap-2">
             <button
               type="button"
               disabled={busy || !newFamily.trim() || !newGiven.trim() || !newGradeYear || !newGender}
@@ -300,14 +300,16 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
           </div>
 
           <div className="mt-6 border-t border-zinc-100 pt-4">
-            <button
-              type="button"
-              disabled={busy || rows.length === 0}
-              className={uiBtnMuted}
-              onClick={() => void saveAll()}
-            >
-              一覧を保存
-            </button>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                disabled={busy || rows.length === 0}
+                className={uiBtnMuted}
+                onClick={() => void saveAll()}
+              >
+                一覧を保存
+              </button>
+            </div>
             <p className="mt-2 text-xs text-zinc-500">
               下の表で変更した内容をサーバーに反映します。
             </p>

@@ -21,12 +21,14 @@ import {
   orderedMemberIdsForMarks,
   parseAttendanceJson,
   parseLineupTeamsJson,
+  parseSubstitutionsJson,
   lineupMemberIdsSelfConsistent,
   validateLineupTeams,
   type GenderScope,
   type MemberForPractice,
+  type PracticeSubstitution,
 } from "@/lib/practiceSessionPlan";
-import { uiBtnPrimary, uiLinkChip } from "@/lib/uiButtons";
+import { uiBtnPrimary, uiBtnSecondary, uiBtnSmDanger, uiLinkChip } from "@/lib/uiButtons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -36,9 +38,11 @@ export type SessionMarksProps = {
   practiceDate: string;
   memo: string;
   roundCount: number;
+  sessionKind: string;
   genderScope: string;
   attendanceJson: string;
   lineupTeamsJson: string;
+  substitutionsJson: string;
   /** チーム編成未保存時の仮チーム人数（1〜6） */
   teamSize: number;
   /** 仮の立ち区切りに使う最大的数（チーム編成と同じ） */
@@ -132,16 +136,24 @@ function MarksTotalsHeaderSpacer({ tone }: { tone: "zinc" | "amber" }) {
 /** 部員行の右端 〇の数／入力枠の総マス（立目×4） */
 function MarksMemberTotalsCell({
   memberId,
-  roundCount,
+  rounds,
   grid,
   variant,
+  effectiveMemberIdForRound,
 }: {
   memberId: string;
-  roundCount: number;
+  rounds: number[];
   grid: Record<string, Shot[]>;
   variant: "zinc" | "amber";
+  effectiveMemberIdForRound: (memberId: string, roundIndex: number) => string;
 }) {
-  const { hits, totalSlots } = memberMarksHitsOverTotalSlots(memberId, roundCount, grid);
+  const totalSlots = rounds.length * 4;
+  const hits = rounds.reduce((sum, roundIndex) => {
+    const effectiveMemberId = effectiveMemberIdForRound(memberId, roundIndex);
+    return sum + memberMarksHitsOverTotalSlots(effectiveMemberId, 1, {
+      [cellKey(effectiveMemberId, 1)]: grid[cellKey(effectiveMemberId, roundIndex)] ?? [null, null, null, null],
+    }).hits;
+  }, 0);
   const borderL = variant === "amber" ? "border-l border-amber-200/90" : "border-l border-zinc-300";
   return (
     <div className={`${MARKS_TOTAL_COL_CLASS} bg-white ${borderL}`}>
@@ -161,6 +173,7 @@ function MarksMemberMarksRow({
   isAdmin,
   cycle,
   variant,
+  effectiveMemberIdForRound,
   hideTopBorder,
 }: {
   memberId: string;
@@ -170,19 +183,20 @@ function MarksMemberMarksRow({
   isAdmin: boolean;
   cycle: (memberId: string, roundIndex: number, shotIdx: number) => void;
   variant: "zinc" | "amber";
+  effectiveMemberIdForRound: (memberId: string, roundIndex: number) => string;
   hideTopBorder?: boolean;
 }) {
   const rowBorder =
     hideTopBorder ? "" : variant === "amber" ? "border-t border-amber-100" : "border-t border-zinc-200";
   const nameBorder = variant === "amber" ? "border-amber-200/90" : "border-zinc-300";
-  const roundCount = rounds.length;
   return (
     <div className={`flex min-w-0 gap-0 bg-white px-1 py-1 ${rowBorder}`}>
       <div className={`${MARKS_NAME_COL_CLASS} bg-white font-medium text-zinc-900 ${nameBorder}`}>{label}</div>
       <div className="flex min-w-0 flex-1 items-center justify-center overflow-x-auto">
         <div className="inline-flex max-w-full flex-nowrap items-stretch justify-center gap-0">
           {rounds.map((r) => {
-            const k = cellKey(memberId, r);
+            const effectiveMemberId = effectiveMemberIdForRound(memberId, r);
+            const k = cellKey(effectiveMemberId, r);
             const slots = grid[k] ?? [null, null, null, null];
             return (
               <MarksRoundShotGrid
@@ -190,13 +204,19 @@ function MarksMemberMarksRow({
                 roundIndex={r}
                 slots={slots}
                 isAdmin={isAdmin}
-                onCycle={(idx) => cycle(memberId, r, idx)}
+                onCycle={(idx) => cycle(effectiveMemberId, r, idx)}
               />
             );
           })}
         </div>
       </div>
-      <MarksMemberTotalsCell memberId={memberId} roundCount={roundCount} grid={grid} variant={variant} />
+      <MarksMemberTotalsCell
+        memberId={memberId}
+        rounds={rounds}
+        grid={grid}
+        variant={variant}
+        effectiveMemberIdForRound={effectiveMemberIdForRound}
+      />
     </div>
   );
 }
@@ -204,7 +224,6 @@ function MarksMemberMarksRow({
 /** 的中入力（別ページ用） */
 export function PracticeMarksEditor({ session, members, records, isAdmin }: Props) {
   const router = useRouter();
-  const recordsKey = useMemo(() => JSON.stringify(records), [records]);
 
   const sessionGenderScope: GenderScope = isGenderScope(session.genderScope) ? session.genderScope : "all";
   // JSON パース結果は毎レンダーで新参照になるため useMemo で安定化（useEffect 無限ループ防止）
@@ -213,19 +232,9 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
     [session.attendanceJson],
   );
   const lineupTeamsRaw = useMemo(() => parseLineupTeamsJson(session.lineupTeamsJson), [session.lineupTeamsJson]);
-
-  /** members の参照は親から毎回変わり得るが、並び・表示に効く内容が同じなら同一キー */
-  const membersStableKey = useMemo(
-    () =>
-      JSON.stringify(
-        members.map((m) => ({
-          id: m.id,
-          name: m.name,
-          gradeYear: m.gradeYear,
-          gender: m.gender,
-        })),
-      ),
-    [members],
+  const serverSubstitutions = useMemo(
+    () => parseSubstitutionsJson(session.substitutionsJson).filter((s) => s.roundIndex <= session.roundCount),
+    [session.substitutionsJson, session.roundCount],
   );
 
   const inScopeMembers = useMemo(
@@ -295,29 +304,39 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
         attendance,
         lineupTeams: displayLineupForPreview ?? [],
       }),
-    [membersStableKey, sessionGenderScope, attendance, displayLineupForPreview],
+    [members, sessionGenderScope, attendance, displayLineupForPreview],
   );
 
   const orderedMembers: MarksMember[] = useMemo(
     () => orderedIds.map((id) => members.find((m) => m.id === id)).filter((m): m is MarksMember => !!m),
-    [orderedIds, membersStableKey],
+    [orderedIds, members],
   );
+
+  const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
 
   const membersNotInLineupTeams = useMemo(
     () => orderedMembers.filter((m) => !lineupMemberIdSet.has(m.id)),
     [orderedMembers, lineupMemberIdSet],
   );
 
+  const rounds = useMemo(() => Array.from({ length: session.roundCount }, (_, i) => i + 1), [session.roundCount]);
+
   const [grid, setGrid] = useState<Record<string, Shot[]>>(() =>
     buildGridFromOrdered(orderedMembers, session.roundCount, records),
   );
   const [savedKeys, setSavedKeys] = useState<Set<string>>(() => initialSavedKeys(records));
+  const [substitutions, setSubstitutions] = useState<PracticeSubstitution[]>(serverSubstitutions);
+  const [substitutionDialogOpen, setSubstitutionDialogOpen] = useState(false);
+  const [subRoundIndex, setSubRoundIndex] = useState(1);
+  const [subOutMemberId, setSubOutMemberId] = useState("");
+  const [subInMemberId, setSubInMemberId] = useState("");
+  const [substitutionMsg, setSubstitutionMsg] = useState<string | null>(null);
   const [marksMsg, setMarksMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const serverGrid = useMemo(
     () => buildGridFromOrdered(orderedMembers, session.roundCount, records),
-    [orderedMembers, session.roundCount, recordsKey],
+    [orderedMembers, session.roundCount, records],
   );
 
   const marksDirty = useMemo(() => !gridsEqual(grid, serverGrid), [grid, serverGrid]);
@@ -325,8 +344,111 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   useEffect(() => {
     setGrid(buildGridFromOrdered(orderedMembers, session.roundCount, records));
     setSavedKeys(initialSavedKeys(records));
-    // records の配列参照は親で毎回新しくなり得るため、内容は recordsKey で追う
-  }, [orderedMembers, session.roundCount, recordsKey]);
+  }, [orderedMembers, session.roundCount, records]);
+
+  useEffect(() => {
+    setSubstitutions(serverSubstitutions);
+  }, [serverSubstitutions]);
+
+  const effectiveMemberIdForRound = useCallback(
+    (memberId: string, roundIndex: number): string => {
+      let current = memberId;
+      for (const sub of substitutions) {
+        if (roundIndex < sub.roundIndex) continue;
+        if (current === sub.outMemberId) current = sub.inMemberId;
+        else if (current === sub.inMemberId) current = sub.outMemberId;
+      }
+      return current;
+    },
+    [substitutions],
+  );
+
+  const substitutionNotesForMember = useCallback(
+    (memberId: string): string[] =>
+      substitutions
+        .filter((s) => s.outMemberId === memberId || s.inMemberId === memberId)
+        .map((s) => {
+          const nextMemberId = s.outMemberId === memberId ? s.inMemberId : s.outMemberId;
+          return `${s.roundIndex}立目〜 ${memberById.get(nextMemberId)?.name ?? nextMemberId}`;
+        }),
+    [memberById, substitutions],
+  );
+
+  const replacementCandidates = useMemo(() => {
+    if (session.sessionKind === "match") return membersNotInLineupTeams;
+    return participatingMembers;
+  }, [membersNotInLineupTeams, participatingMembers, session.sessionKind]);
+
+  const substitutionOutCandidates = useMemo(() => {
+    if (session.sessionKind === "match") {
+      return orderedMembers.filter((m) => lineupMemberIdSet.has(m.id));
+    }
+    return orderedMembers;
+  }, [lineupMemberIdSet, orderedMembers, session.sessionKind]);
+
+  const openSubstitutionDialog = () => {
+    if (!isAdmin || busy || substitutionOutCandidates.length === 0) return;
+    const firstOut = substitutionOutCandidates[0]?.id ?? "";
+    const firstIn = replacementCandidates.find((m) => m.id !== firstOut)?.id ?? "";
+    setSubRoundIndex(1);
+    setSubOutMemberId(firstOut);
+    setSubInMemberId(firstIn);
+    setSubstitutionMsg(null);
+    setSubstitutionDialogOpen(true);
+  };
+
+  const saveSubstitutionsToServer = async (next: PracticeSubstitution[]): Promise<boolean> => {
+    setBusy(true);
+    setSubstitutionMsg(null);
+    const res = await fetch(`/api/practices/${session.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ substitutions: next }),
+    });
+    setBusy(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setSubstitutionMsg(data.error ?? "交代の保存に失敗しました");
+      return false;
+    }
+    setSubstitutions(next);
+    router.refresh();
+    return true;
+  };
+
+  const addSubstitution = async () => {
+    if (!isAdmin) return;
+    const roundIndex = Math.floor(subRoundIndex);
+    if (roundIndex < 1 || roundIndex > session.roundCount) {
+      setSubstitutionMsg("立目を選んでください");
+      return;
+    }
+    if (!subOutMemberId || !subInMemberId || subOutMemberId === subInMemberId) {
+      setSubstitutionMsg("交代する2人を選んでください");
+      return;
+    }
+    const next = [
+      ...substitutions.filter(
+        (s) => !(s.roundIndex === roundIndex && s.outMemberId === subOutMemberId),
+      ),
+      { roundIndex, outMemberId: subOutMemberId, inMemberId: subInMemberId },
+    ].sort((a, b) => a.roundIndex - b.roundIndex);
+    const ok = await saveSubstitutionsToServer(next);
+    if (ok) setSubstitutionDialogOpen(false);
+  };
+
+  const removeSubstitution = async (target: PracticeSubstitution) => {
+    if (!isAdmin || busy) return;
+    const next = substitutions.filter(
+      (s) =>
+        !(
+          s.roundIndex === target.roundIndex &&
+          s.outMemberId === target.outMemberId &&
+          s.inMemberId === target.inMemberId
+        ),
+    );
+    await saveSubstitutionsToServer(next);
+  };
 
   useEffect(() => {
     if (!isAdmin || !marksDirty) return;
@@ -361,16 +483,29 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
 
     const items: { memberId: string; roundIndex: number; marks: string }[] = [];
     const clears: { memberId: string; roundIndex: number }[] = [];
+    const producedKeys = new Set<string>();
 
     for (const m of orderedMembers) {
       for (let r = 1; r <= session.roundCount; r++) {
-        const k = cellKey(m.id, r);
+        const effectiveMemberId = effectiveMemberIdForRound(m.id, r);
+        const k = cellKey(effectiveMemberId, r);
+        producedKeys.add(k);
         const slots = grid[k] ?? [null, null, null, null];
         const marks = slotsToMarks(slots);
         const had = savedKeys.has(k);
-        if (marks) items.push({ memberId: m.id, roundIndex: r, marks });
-        else if (had) clears.push({ memberId: m.id, roundIndex: r });
+        if (marks) items.push({ memberId: effectiveMemberId, roundIndex: r, marks });
+        else if (had) clears.push({ memberId: effectiveMemberId, roundIndex: r });
       }
+    }
+
+    for (const savedKey of savedKeys) {
+      if (producedKeys.has(savedKey)) continue;
+      const splitAt = savedKey.lastIndexOf("-");
+      if (splitAt <= 0) continue;
+      const memberId = savedKey.slice(0, splitAt);
+      const roundIndex = Number(savedKey.slice(splitAt + 1));
+      if (!orderedIds.includes(memberId) || !Number.isFinite(roundIndex)) continue;
+      clears.push({ memberId, roundIndex });
     }
 
     const res = await fetch(`/api/practices/${session.id}/records`, {
@@ -386,10 +521,6 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
     }
     router.refresh();
   };
-
-  const rounds = Array.from({ length: session.roundCount }, (_, i) => i + 1);
-
-  const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [membersStableKey]);
 
   const useLineupPreviewLayout =
     displayLineupForPreview !== null &&
@@ -431,17 +562,52 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <h2 className="text-lg font-semibold">的中（1立ち＝4射・〇×）</h2>
           {isAdmin ? (
-            <button
-              type="button"
-              disabled={busy}
-              className={`${uiBtnPrimary} w-full shrink-0 justify-center sm:w-auto`}
-              onClick={() => void saveMarks()}
-            >
-              記録を保存
-            </button>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <button
+                type="button"
+                disabled={busy}
+                className={`${uiBtnSecondary} w-full shrink-0 justify-center sm:w-auto`}
+                onClick={openSubstitutionDialog}
+              >
+                交代
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className={`${uiBtnPrimary} w-full shrink-0 justify-center sm:w-auto`}
+                onClick={() => void saveMarks()}
+              >
+                記録を保存
+              </button>
+            </div>
           ) : null}
         </div>
         {marksMsg ? <p className="text-sm text-red-700">{marksMsg}</p> : null}
+        {substitutions.length > 0 ? (
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2 text-xs text-indigo-950">
+            <p className="font-semibold">交代</p>
+            <ul className="mt-1 space-y-1">
+              {substitutions.map((s) => (
+                <li key={`${s.roundIndex}-${s.outMemberId}-${s.inMemberId}`} className="flex flex-wrap items-center gap-2">
+                  <span>
+                    {s.roundIndex}立目〜 {memberById.get(s.outMemberId)?.name ?? s.outMemberId} ⇄{" "}
+                    {memberById.get(s.inMemberId)?.name ?? s.inMemberId}
+                  </span>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className={uiBtnSmDanger}
+                      disabled={busy}
+                      onClick={() => void removeSubstitution(s)}
+                    >
+                      削除
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <p className="text-sm text-zinc-600">
           {useLineupPreviewLayout
             ? isSyntheticLineupPreview
@@ -493,6 +659,11 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                                     {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
                                   </span>
                                   {m.name}
+                                  {substitutionNotesForMember(m.id).map((note) => (
+                                    <span key={note} className="mt-0.5 block text-[0.68rem] font-normal text-indigo-700">
+                                      {note}
+                                    </span>
+                                  ))}
                                 </>
                               }
                               rounds={rounds}
@@ -500,6 +671,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                               isAdmin={isAdmin}
                               cycle={cycle}
                               variant="zinc"
+                              effectiveMemberIdForRound={effectiveMemberIdForRound}
                             />
                           );
                         })}
@@ -533,6 +705,11 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                               {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
                             </span>
                             {m.name}
+                            {substitutionNotesForMember(m.id).map((note) => (
+                              <span key={note} className="mt-0.5 block text-[0.68rem] font-normal text-indigo-700">
+                                {note}
+                              </span>
+                            ))}
                           </>
                         }
                         rounds={rounds}
@@ -540,6 +717,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                         isAdmin={isAdmin}
                         cycle={cycle}
                         variant="amber"
+                        effectiveMemberIdForRound={effectiveMemberIdForRound}
                         hideTopBorder={mi === 0}
                       />
                     ))}
@@ -569,6 +747,11 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                         {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
                       </span>
                       {m.name}
+                      {substitutionNotesForMember(m.id).map((note) => (
+                        <span key={note} className="mt-0.5 block text-[0.68rem] font-normal text-indigo-700">
+                          {note}
+                        </span>
+                      ))}
                     </>
                   }
                   rounds={rounds}
@@ -576,6 +759,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                   isAdmin={isAdmin}
                   cycle={cycle}
                   variant="zinc"
+                  effectiveMemberIdForRound={effectiveMemberIdForRound}
                   hideTopBorder={mi === 0}
                 />
               ))}
@@ -583,6 +767,104 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
           )}
         </div>
       </section>
+      {substitutionDialogOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="presentation"
+          onClick={() => setSubstitutionDialogOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="substitution-dialog-title"
+            className="w-full max-w-lg rounded-xl border border-zinc-200 bg-white p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="substitution-dialog-title" className="text-base font-bold text-zinc-900">
+              メンバー交代
+            </h3>
+            <p className="mt-2 text-xs text-zinc-500">
+              指定した立目以降で、選択した2人の表示位置と的中の保存先を入れ替えます。
+              {session.sessionKind === "match"
+                ? " 試合では、交代先はチーム未割当の出席者から選びます。"
+                : " 正規練習では、交代先は出席者全員から選べます。"}
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <label className="block text-sm font-medium text-zinc-800">
+                何立目から
+                <select
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                  value={subRoundIndex}
+                  onChange={(e) => setSubRoundIndex(Number(e.target.value))}
+                >
+                  {rounds.map((r) => (
+                    <option key={r} value={r}>
+                      {r}立目
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-zinc-800">
+                交代元
+                <select
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                  value={subOutMemberId}
+                  onChange={(e) => {
+                    const nextOut = e.target.value;
+                    setSubOutMemberId(nextOut);
+                    if (subInMemberId === nextOut) {
+                      setSubInMemberId(replacementCandidates.find((m) => m.id !== nextOut)?.id ?? "");
+                    }
+                  }}
+                >
+                  {substitutionOutCandidates.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-zinc-800">
+                交代先
+                <select
+                  className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+                  value={subInMemberId}
+                  onChange={(e) => setSubInMemberId(e.target.value)}
+                >
+                  {replacementCandidates
+                    .filter((m) => m.id !== subOutMemberId)
+                    .map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            </div>
+
+            {substitutionMsg ? <p className="mt-3 text-sm text-red-700">{substitutionMsg}</p> : null}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+              <button
+                type="button"
+                className={`${uiBtnSecondary} w-full sm:w-auto`}
+                onClick={() => setSubstitutionDialogOpen(false)}
+              >
+                キャンセル
+              </button>
+              <button
+                type="button"
+                disabled={busy || !subOutMemberId || !subInMemberId}
+                className={`${uiBtnPrimary} w-full sm:w-auto`}
+                onClick={() => void addSubstitution()}
+              >
+                交代を保存
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

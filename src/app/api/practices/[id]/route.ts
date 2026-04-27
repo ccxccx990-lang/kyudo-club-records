@@ -4,11 +4,15 @@ import {
   isGenderScope,
   membersInGenderScope,
   parseAttendanceJson,
+  parseLineupTeamsJson,
+  parseSubstitutionsJson,
   stringifyAttendance,
   stringifyLineupTeams,
+  stringifySubstitutions,
   validateLineupTeams,
   type AttendanceState,
   type GenderScope,
+  type PracticeSubstitution,
 } from "@/lib/practiceSessionPlan";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/http";
@@ -99,6 +103,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     typeof body === "object" && body !== null && "sessionKind" in body
       ? String((body as { sessionKind?: unknown }).sessionKind ?? "").trim()
       : undefined;
+  const substitutionsUnknown =
+    typeof body === "object" && body !== null && "substitutions" in body
+      ? (body as { substitutions?: unknown }).substitutions
+      : undefined;
 
   const data: {
     practiceDate?: string;
@@ -110,6 +118,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
     teamSize?: number;
     maxMato?: number;
     sessionKind?: string;
+    substitutionsJson?: string;
   } = {};
 
   if (practiceDate !== undefined) {
@@ -184,13 +193,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
     data.maxMato = Math.floor(maxMatoRaw);
   }
 
+  let nextSessionKind = sessionRow.sessionKind;
   if (sessionKindRaw !== undefined) {
     if (sessionKindRaw !== "joint" && sessionKindRaw !== "match") {
       return NextResponse.json({ error: "sessionKind は joint か match です" }, { status: 400 });
     }
+    nextSessionKind = sessionKindRaw;
     data.sessionKind = sessionKindRaw;
   }
 
+  let nextLineupTeams = parseLineupTeamsJson(sessionRow.lineupTeamsJson);
   if (lineupTeamsUnknown !== undefined) {
     if (!Array.isArray(lineupTeamsUnknown)) {
       return NextResponse.json({ error: "lineupTeams は配列で送ってください" }, { status: 400 });
@@ -214,7 +226,53 @@ export async function PATCH(req: Request, ctx: Ctx) {
         return NextResponse.json({ error: err }, { status: 400 });
       }
     }
+    nextLineupTeams = teams;
     data.lineupTeamsJson = stringifyLineupTeams(teams);
+  }
+
+  if (substitutionsUnknown !== undefined) {
+    if (!Array.isArray(substitutionsUnknown)) {
+      return NextResponse.json({ error: "substitutions は配列で送ってください" }, { status: 400 });
+    }
+
+    const attendingMembers = membersInGenderScope(memberRows, nextGenderScope).filter((m) => nextAttendance[m.id] !== "absent");
+    const attendingSet = new Set(attendingMembers.map((m) => m.id));
+    const lineupMemberSet = new Set(nextLineupTeams.flat());
+    const unassignedSet = new Set(attendingMembers.filter((m) => !lineupMemberSet.has(m.id)).map((m) => m.id));
+
+    const substitutions: PracticeSubstitution[] = [];
+    for (const row of substitutionsUnknown) {
+      const parsed = parseSubstitutionsJson(JSON.stringify([row]))[0];
+      if (!parsed) {
+        return NextResponse.json(
+          { error: "交代には roundIndex, outMemberId, inMemberId が必要です" },
+          { status: 400 },
+        );
+      }
+      if (parsed.roundIndex > (data.roundCount ?? sessionRow.roundCount)) {
+        return NextResponse.json({ error: "交代の立目が立ち数を超えています" }, { status: 400 });
+      }
+      if (!attendingSet.has(parsed.outMemberId)) {
+        return NextResponse.json({ error: "交代元は出席者から選んでください" }, { status: 400 });
+      }
+      if (nextSessionKind === "match" && !lineupMemberSet.has(parsed.outMemberId)) {
+        return NextResponse.json(
+          { error: "試合の交代元はチーム内の出席者から選んでください" },
+          { status: 400 },
+        );
+      }
+      if (!attendingSet.has(parsed.inMemberId)) {
+        return NextResponse.json({ error: "交代先は出席者から選んでください" }, { status: 400 });
+      }
+      if (nextSessionKind === "match" && !unassignedSet.has(parsed.inMemberId)) {
+        return NextResponse.json(
+          { error: "試合の交代先はチーム未割当の出席者から選んでください" },
+          { status: 400 },
+        );
+      }
+      substitutions.push(parsed);
+    }
+    data.substitutionsJson = stringifySubstitutions(substitutions);
   }
 
   /** 参加区分・出席のみ更新するときはチーム編成と〇×記録をリセット（同一リクエストで lineupTeams を送る場合は除外） */
@@ -223,7 +281,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   if (clearLineupAndMarksOnPlanSave) {
     data.lineupTeamsJson = stringifyLineupTeams([]);
+    data.substitutionsJson = stringifySubstitutions([]);
     data.teamSize = 4;
+  } else if (lineupTeamsUnknown !== undefined && substitutionsUnknown === undefined) {
+    data.substitutionsJson = stringifySubstitutions([]);
   }
 
   if (Object.keys(data).length === 0) {

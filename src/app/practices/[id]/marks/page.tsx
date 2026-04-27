@@ -69,9 +69,11 @@ export default async function PracticeMarksPage({ params }: PageProps) {
           practiceDate: sessionRest.practiceDate,
           memo: sessionRest.memo,
           roundCount: sessionRest.roundCount,
+          sessionKind: sessionRest.sessionKind,
           genderScope: sessionRest.genderScope,
           attendanceJson: sessionRest.attendanceJson,
           lineupTeamsJson: sessionRest.lineupTeamsJson,
+          substitutionsJson: sessionRest.substitutionsJson,
           teamSize: sessionRest.teamSize,
           maxMato: sessionRest.maxMato,
         }}
