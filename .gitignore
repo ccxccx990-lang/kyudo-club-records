@@ -37,6 +37,7 @@ yarn-error.log*
 # SQLite（ローカル開発）
 /prisma/dev.db
 /prisma/dev.db-journal
+/prisma/member-update-backup-*.json
 
 # vercel
 .vercel

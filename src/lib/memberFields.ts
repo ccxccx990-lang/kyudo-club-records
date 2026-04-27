@@ -11,17 +11,23 @@ export const ROLE_OPTIONS = [
   "女子主務",
   "幹事",
   "副務",
+  "会計",
+  "副会計",
   "広報",
   "学連",
   "体連",
+  "弓友会連絡委員",
+  "学生弓道連盟専任委員",
 ] as const;
 export type RoleOption = (typeof ROLE_OPTIONS)[number];
 
 export const GENDER_OPTIONS = ["男", "女"] as const;
 export type Gender = (typeof GENDER_OPTIONS)[number];
 
+const GRADE_SORT_ORDER = ["4年", "3年", "2年", "1年"] as const;
+
 const GRADE_RANK = new Map<string, number>(
-  GRADE_OPTIONS.map((g, i) => [g, i]),
+  GRADE_SORT_ORDER.map((g, i) => [g, i]),
 );
 
 function gradeRank(gradeYear: string): number {
@@ -34,7 +40,7 @@ function genderRank(gender: string): number {
   return 2;
 }
 
-/** 表示・記録表の並び: 学年 → 男女 → 名前 */
+/** 表示・記録表の並び: 高学年 → 男女 → 名前 */
 export function sortMembers<T extends { gradeYear: string; gender: string; name: string }>(
   members: T[],
 ): T[] {
