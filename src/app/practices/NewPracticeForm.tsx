@@ -152,7 +152,7 @@ export function NewPracticeForm() {
           </div>
         </div>
         <label className={fieldHalf}>
-          種別（個人的中率レポートの「区分」に反映）
+          種別（的中率レポートの「区分」に反映）
           <select
             className="mt-1 w-full rounded-md border border-zinc-300 px-3 py-2"
             value={sessionKind}

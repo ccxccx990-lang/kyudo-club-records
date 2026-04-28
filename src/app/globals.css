@@ -41,7 +41,7 @@ body {
     background: white !important;
     color: black !important;
   }
-  /* 個人的中率ブロック: 印刷ダイアログの背景オフ設定に左右されず白面に統一 */
+  /* 的中率ブロック: 印刷ダイアログの背景オフ設定に左右されず白面に統一 */
   .hit-rate-pdf-vertical-wrap,
   .hit-rate-pdf-vertical-wrap *,
   #hit-rate-print-root,

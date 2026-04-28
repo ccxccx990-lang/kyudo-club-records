@@ -78,7 +78,7 @@ export default async function PracticesPage({ searchParams }: { searchParams?: P
   return (
     <main className="mx-auto max-w-4xl space-y-6 px-4 py-10">
       <div>
-        <h1 className="text-2xl font-bold">的中記録</h1>
+        <h1 className="text-2xl font-bold">記録</h1>
         <p className="mt-2 text-sm text-zinc-600">
           {isAdmin ? (
             <>
@@ -205,8 +205,8 @@ export default async function PracticesPage({ searchParams }: { searchParams?: P
                   {year || month || kind !== "all"
                     ? "条件に合う練習がありません。"
                     : isAdmin
-                      ? "まだ的中記録がありません。「入力」から追加できます。"
-                      : "まだ的中記録がありません。管理者が追加してください。"}
+                      ? "まだ記録がありません。「入力」から追加できます。"
+                      : "まだ記録がありません。管理者が追加してください。"}
                 </td>
               </tr>
             ) : null}

@@ -5,6 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
+function navButtonClass(active: boolean): string {
+  const base =
+    "inline-flex min-h-9 items-center justify-center rounded-lg border px-3 py-1.5 text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2";
+  return active
+    ? `${base} border-indigo-600 bg-indigo-50 text-indigo-950`
+    : `${base} border-zinc-200 bg-white text-zinc-700 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-900`;
+}
+
 /** 画面上部のナビゲーション */
 export function SiteHeader() {
   const pathname = usePathname();
@@ -42,45 +50,31 @@ export function SiteHeader() {
           <Link className="text-base font-semibold text-indigo-800" href="/">
             的中ログ
           </Link>
-          <nav className="flex flex-wrap gap-x-3 gap-y-1 text-zinc-600">
+          <nav className="flex flex-wrap gap-2.5 text-zinc-600">
             <Link
-              className={
+              className={navButtonClass(
                 pathname === "/practices" ||
-                (pathname.startsWith("/practices/") && !pathname.startsWith("/practices/input"))
-                  ? "font-semibold text-indigo-900"
-                  : "hover:text-zinc-900"
-              }
+                  (pathname.startsWith("/practices/") && !pathname.startsWith("/practices/input")),
+              )}
               href="/practices"
             >
-              的中記録
+              記録
             </Link>
             <Link
-              className={
-                pathname === "/members" || pathname.startsWith("/members/")
-                  ? "font-semibold text-indigo-900"
-                  : "hover:text-zinc-900"
-              }
+              className={navButtonClass(pathname === "/members" || pathname.startsWith("/members/"))}
               href="/members"
             >
               部員
             </Link>
             <Link
-              className={
-                pathname.startsWith("/reports/")
-                  ? "font-semibold text-indigo-900"
-                  : "hover:text-zinc-900"
-              }
+              className={navButtonClass(pathname.startsWith("/reports/"))}
               href="/reports/personal-hit-rate"
             >
-              個人的中率
+              的中率
             </Link>
             {admin ? (
               <Link
-                className={
-                  pathname.startsWith("/practices/input")
-                    ? "font-semibold text-indigo-900"
-                    : "hover:text-zinc-900"
-                }
+                className={navButtonClass(pathname.startsWith("/practices/input"))}
                 href="/practices/input"
               >
                 入力

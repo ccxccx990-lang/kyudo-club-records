@@ -18,7 +18,7 @@ export default async function MembersPage() {
     isAdmin = await readIsAdmin();
     const raw = await prisma.member.findMany({
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, gradeYear: true, gender: true, role: true },
+      select: { id: true, name: true, nameKana: true, gradeYear: true, gender: true, role: true },
     });
     members = sortMembers(raw);
   } catch (e) {

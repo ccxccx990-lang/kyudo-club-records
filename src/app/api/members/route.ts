@@ -49,6 +49,10 @@ export async function POST(req: Request) {
     typeof body === "object" && body !== null && "role" in body
       ? String((body as { role?: unknown }).role ?? "").trim()
       : "";
+  const nameKana =
+    typeof body === "object" && body !== null && "nameKana" in body
+      ? String((body as { nameKana?: unknown }).nameKana ?? "").trim()
+      : "";
 
   if (!familyName || !givenName) {
     return NextResponse.json({ error: "苗字と名前を入力してください" }, { status: 400 });
@@ -76,7 +80,7 @@ export async function POST(req: Request) {
   }
 
   const member = await prisma.member.create({
-    data: { name, gradeYear, gender, role },
+    data: { name, nameKana, gradeYear, gender, role },
   });
   return NextResponse.json({ member }, { status: 201 });
 }

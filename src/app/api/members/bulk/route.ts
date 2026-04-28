@@ -11,6 +11,7 @@ import { requireAdmin } from "@/lib/http";
 type Row = {
   id: string;
   name: string;
+  nameKana: string;
   gradeYear: string;
   gender: string;
   role: string;
@@ -43,12 +44,14 @@ export async function POST(req: Request) {
     const m = item as {
       id?: unknown;
       name?: unknown;
+      nameKana?: unknown;
       gradeYear?: unknown;
       gender?: unknown;
       role?: unknown;
     };
     const id = typeof m.id === "string" ? m.id : "";
     const name = typeof m.name === "string" ? m.name.trim() : "";
+    const nameKana = typeof m.nameKana === "string" ? m.nameKana.trim() : "";
     const gradeYear = typeof m.gradeYear === "string" ? m.gradeYear.trim() : "";
     const gender = typeof m.gender === "string" ? m.gender.trim() : "";
     const role = typeof m.role === "string" ? m.role.trim() : "";
@@ -78,6 +81,7 @@ export async function POST(req: Request) {
     rows.push({
       id,
       name,
+      nameKana,
       gradeYear,
       gender,
       role,
@@ -141,6 +145,7 @@ export async function POST(req: Request) {
         where: { id: r.id },
         data: {
           name: r.name,
+          nameKana: r.nameKana,
           gradeYear: r.gradeYear,
           gender: r.gender,
           role: r.role,

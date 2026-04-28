@@ -80,13 +80,18 @@ function genderRank(gender) {
   return 2;
 }
 
+function memberSortReading(m) {
+  const k = (m.nameKana ?? "").trim();
+  return k.length > 0 ? k : m.name.trim();
+}
+
 function sortMembers(rows) {
   return [...rows].sort((a, b) => {
     const grade = (gradeRank.get(a.gradeYear) ?? 99) - (gradeRank.get(b.gradeYear) ?? 99);
     if (grade !== 0) return grade;
     const gender = genderRank(a.gender) - genderRank(b.gender);
     if (gender !== 0) return gender;
-    return a.name.localeCompare(b.name, "ja");
+    return memberSortReading(a).localeCompare(memberSortReading(b), "ja");
   });
 }
 

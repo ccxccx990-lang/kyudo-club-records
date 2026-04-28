@@ -40,7 +40,7 @@ export default async function PracticePage({ params }: PageProps) {
   try {
     const rawMembers = await prisma.member.findMany({
       orderBy: { createdAt: "asc" },
-      select: { id: true, name: true, gradeYear: true, gender: true },
+      select: { id: true, name: true, nameKana: true, gradeYear: true, gender: true },
     });
     members = sortMembers(rawMembers);
   } catch (e) {

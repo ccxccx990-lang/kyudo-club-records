@@ -40,8 +40,14 @@ function genderRank(gender: string): number {
   return 2;
 }
 
-/** 表示・記録表の並び: 高学年 → 男女 → 名前 */
-export function sortMembers<T extends { gradeYear: string; gender: string; name: string }>(
+/** 並び用の読み。ひらがながあればそれ、なければ表示名 */
+export function memberSortReading(m: { name: string; nameKana?: string }): string {
+  const k = (m.nameKana ?? "").trim();
+  return k.length > 0 ? k : m.name.trim();
+}
+
+/** 表示・記録表の並び: 高学年 → 男女 → ひらがな（なければ名前） */
+export function sortMembers<T extends { gradeYear: string; gender: string; name: string; nameKana?: string }>(
   members: T[],
 ): T[] {
   return [...members].sort((a, b) => {
@@ -49,7 +55,7 @@ export function sortMembers<T extends { gradeYear: string; gender: string; name:
     if (g !== 0) return g;
     const s = genderRank(a.gender) - genderRank(b.gender);
     if (s !== 0) return s;
-    return a.name.localeCompare(b.name, "ja");
+    return memberSortReading(a).localeCompare(memberSortReading(b), "ja");
   });
 }
 

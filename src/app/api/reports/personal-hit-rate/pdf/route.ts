@@ -68,7 +68,7 @@ async function launchPdfBrowser(): Promise<Browser> {
 }
 
 /**
- * 個人的中率: クライアントが描画した `#hit-rate-pdf-vertical-wrap` の outerHTML を受け取り、
+ * 的中率: クライアントが描画した `#hit-rate-pdf-vertical-wrap` の outerHTML を受け取り、
  * サーバーで headless Chromium（Vercel では @sparticuz/chromium）により PDF 化する。
  */
 export async function POST(req: Request) {

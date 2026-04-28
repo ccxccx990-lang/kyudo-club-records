@@ -105,7 +105,7 @@ export async function GET(req: Request) {
     const { from, to } = monthDateRangeIso(year, month, period);
 
     const members = await prisma.member.findMany({
-      select: { id: true, name: true, gradeYear: true, gender: true },
+      select: { id: true, name: true, nameKana: true, gradeYear: true, gender: true },
     });
 
     const sessions = await loadSessionsInDateRange(from, to);

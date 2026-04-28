@@ -232,7 +232,7 @@ export function PersonalHitRateReportClient() {
     try {
       const y = Number(year);
       const safeYear = Number.isInteger(y) && y >= 2000 && y <= 2100 ? y : def.year;
-      const filename = `個人的中率_${safeYear}年${month}月.pdf`;
+      const filename = `的中率_${safeYear}年${month}月.pdf`;
 
       const res = await fetch("/api/reports/personal-hit-rate/pdf", {
         method: "POST",
@@ -403,31 +403,30 @@ export function PersonalHitRateReportClient() {
         </div>
       </section>
 
-      <div
-        id="hit-rate-pdf-vertical-wrap"
-        className="hit-rate-pdf-vertical-wrap"
-        style={{
-          width: PDF_CAPTURE_WIDTH_PX,
-          maxWidth: "100%",
-          marginLeft: "auto",
-          marginRight: "auto",
-          boxSizing: "border-box",
-          overflow: "hidden",
-        }}
-      >
-      <section
-        id="hit-rate-print-root"
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          overflow: "hidden",
-          borderRadius: 8,
-          border: `1px solid ${PDF_PALETTE.border}`,
-          backgroundColor: PDF_PALETTE.bg,
-          color: PDF_PALETTE.ink,
-          fontFamily: "Arial, Helvetica, sans-serif",
-        }}
-      >
+      {/* プレビューは PDF 出力と同じ固定幅のため、狭い画面では横スクロールで全体を見られるようにする */}
+      <div className="flex w-full min-w-0 justify-center overflow-x-auto overflow-y-visible overscroll-x-contain pb-2 [-webkit-overflow-scrolling:touch] sm:pb-0">
+        <div
+          id="hit-rate-pdf-vertical-wrap"
+          className="hit-rate-pdf-vertical-wrap shrink-0"
+          style={{
+            width: PDF_CAPTURE_WIDTH_PX,
+            boxSizing: "border-box",
+            overflow: "visible",
+          }}
+        >
+          <section
+            id="hit-rate-print-root"
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              overflow: "visible",
+              borderRadius: 8,
+              border: `1px solid ${PDF_PALETTE.border}`,
+              backgroundColor: PDF_PALETTE.bg,
+              color: PDF_PALETTE.ink,
+              fontFamily: "Arial, Helvetica, sans-serif",
+            }}
+          >
         <div
           style={{
             borderBottom: `1px solid ${PDF_PALETTE.border}`,
@@ -726,8 +725,10 @@ export function PersonalHitRateReportClient() {
             </div>
           </div>
         </div>
-      </section>
+        </section>
+        </div>
       </div>
+
     </main>
   );
 }

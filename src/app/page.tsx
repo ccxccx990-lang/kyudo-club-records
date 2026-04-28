@@ -13,7 +13,7 @@ export default async function HomePage() {
       <div className="space-y-2">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900">的中ログ</h1>
         <p className="text-zinc-600">
-          大学弓道部向けの、部員管理と<strong>正規練習</strong>（男子・女子の同時練習）の的中記録です。
+          大学弓道部向けの、部員管理と<strong>正規練習</strong>（男子・女子の同時練習）の記録です。
           代表端末（PC や iPad）から、1立ち（4射）を<strong>〇×</strong>で入力します。
         </p>
       </div>
@@ -35,7 +35,7 @@ export default async function HomePage() {
         </li>
         <li className="min-h-0">
           <Link className={homeNavTileClass} href="/reports/personal-hit-rate">
-            <div className="text-xs font-semibold leading-tight text-indigo-800">個人的中率</div>
+            <div className="text-xs font-semibold leading-tight text-indigo-800">的中率</div>
             <div className="mt-0.5 text-xs leading-snug text-zinc-600">集計・PDF</div>
           </Link>
         </li>

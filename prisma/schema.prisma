@@ -17,6 +17,8 @@ datasource db {
 model Member {
   id         String   @id @default(cuid())
   name       String
+  // ひらがな（読み）。並び順に使う。空なら表示名でソート
+  nameKana   String   @default("")
   gradeYear  String   @default("") // 1年〜4年（プルダウン）
   gender     String   @default("") // 男 / 女
   role       String   @default("") // 役職（プルダウン）

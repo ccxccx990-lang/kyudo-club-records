@@ -20,6 +20,8 @@ import { useMemo, useState, useEffect } from "react";
 export type MemberRow = {
   id: string;
   name: string;
+  /** ひらがな（読み）。並び順に使う */
+  nameKana: string;
   gradeYear: string;
   gender: string;
   role: string;
@@ -98,6 +100,7 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
   const [rows, setRows] = useState<MemberRow[]>(initialMembers);
   const [newFamily, setNewFamily] = useState("");
   const [newGiven, setNewGiven] = useState("");
+  const [newNameKana, setNewNameKana] = useState("");
   const [newGradeYear, setNewGradeYear] = useState("");
   const [newGender, setNewGender] = useState("");
   const [newRoleSlots, setNewRoleSlots] = useState<string[]>([""]);
@@ -117,7 +120,12 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
     if (filterGrade) list = list.filter((r) => r.gradeYear === filterGrade);
     if (filterGender) list = list.filter((r) => r.gender === filterGender);
     const q = nameSearch.trim().toLowerCase();
-    if (q) list = list.filter((r) => r.name.toLowerCase().includes(q));
+    if (q) {
+      list = list.filter((r) => {
+        const k = (r.nameKana ?? "").toLowerCase();
+        return r.name.toLowerCase().includes(q) || k.includes(q);
+      });
+    }
     return list;
   }, [rows, filterGrade, filterGender, nameSearch]);
 
@@ -146,6 +154,7 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
       body: JSON.stringify({
         familyName: newFamily.trim(),
         givenName: newGiven.trim(),
+        nameKana: newNameKana.trim(),
         gradeYear: newGradeYear,
         gender: newGender,
         role: joinRoleSlots(newRoleSlots),
@@ -159,6 +168,7 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
     }
     setNewFamily("");
     setNewGiven("");
+    setNewNameKana("");
     setNewGradeYear("");
     setNewGender("");
     setNewRoleSlots([""]);
@@ -268,6 +278,16 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
                 autoComplete="given-name"
               />
             </label>
+            <label className="block text-sm text-zinc-700 sm:col-span-2">
+              ひらがな（読み・任意）
+              <input
+                className="mt-1 w-full min-h-[2.5rem] rounded-md border border-zinc-300 px-3 py-2"
+                value={newNameKana}
+                onChange={(e) => setNewNameKana(e.target.value)}
+                placeholder="並び順に使います（例: やまだ たろう）"
+                autoComplete="off"
+              />
+            </label>
             <label className="block text-sm text-zinc-700" htmlFor="new-grade">
               学年 <span className="text-red-600">*</span>
               <span className="mt-1 block">{gradeSelect(newGradeYear, setNewGradeYear, "new-grade")}</span>
@@ -363,13 +383,14 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
       </section>
 
       <section className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
-        <table className="w-full min-w-[840px] text-left text-sm">
+        <table className="w-full min-w-[960px] text-left text-sm">
           <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               <th className="px-4 py-3">学年</th>
               <th className="px-4 py-3">男女</th>
               <th className="px-4 py-3">苗字</th>
               <th className="px-4 py-3">名前</th>
+              <th className="px-4 py-3">ひらがな</th>
               <th className="px-4 py-3">役職</th>
               {canEdit ? <th className="px-4 py-3">操作</th> : null}
             </tr>
@@ -404,6 +425,14 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
                       }}
                     />
                   </td>
+                  <td className="px-4 py-2">
+                    <input
+                      className="w-full min-w-[7rem] min-h-[2.5rem] rounded-md border border-zinc-300 px-3 py-2"
+                      value={m.nameKana ?? ""}
+                      onChange={(e) => patchRow(m.id, { nameKana: e.target.value })}
+                      placeholder="読み"
+                    />
+                  </td>
                   <td className="px-4 py-2 align-top">
                     <RoleSlotPicker
                       slots={splitRoleSlots(m.role)}
@@ -428,13 +457,14 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
                   <td className="px-4 py-3 font-medium text-zinc-900">
                     {splitMemberDisplayName(m.name).givenName || "—"}
                   </td>
+                  <td className="px-4 py-3 text-zinc-600">{m.nameKana?.trim() ? m.nameKana : "—"}</td>
                   <td className="px-4 py-3 text-zinc-700">{m.role || "—"}</td>
                 </tr>
               ),
             )}
             {displayRows.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 text-zinc-500" colSpan={canEdit ? 6 : 5}>
+                <td className="px-4 py-6 text-zinc-500" colSpan={canEdit ? 7 : 6}>
                   {rows.length === 0
                     ? readOnlyDb
                       ? "一覧を読み込めませんでした。画面の上の案内を確認してください。"

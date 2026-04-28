@@ -30,6 +30,11 @@ function genderRank(g) {
   return 2;
 }
 
+function memberSortReading(m) {
+  const k = (m.nameKana ?? "").trim();
+  return k.length > 0 ? k : m.name.trim();
+}
+
 /** アプリの sortMembers と同じ並び */
 function sortMembersLike(members) {
   return [...members].sort((a, b) => {
@@ -37,7 +42,7 @@ function sortMembersLike(members) {
     if (g !== 0) return g;
     const s = genderRank(a.gender) - genderRank(b.gender);
     if (s !== 0) return s;
-    return a.name.localeCompare(b.name, "ja");
+    return memberSortReading(a).localeCompare(memberSortReading(b), "ja");
   });
 }
 

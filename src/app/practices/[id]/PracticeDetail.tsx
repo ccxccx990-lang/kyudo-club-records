@@ -18,6 +18,8 @@ import {
 } from "@/lib/practiceSessionPlan";
 import {
   uiBtnAccent,
+  uiBtnDangerOutline,
+  uiBtnDangerSolid,
   uiBtnSecondary,
   uiLinkChip,
   uiToggleChoice,
@@ -64,7 +66,7 @@ function attendanceLabel(state: AttendanceState): string {
 
 function attendanceChoiceClass(state: AttendanceState, selected: boolean): string {
   const base =
-    "rounded-md border px-2 py-1 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2";
+    "rounded-md border px-1.5 py-0.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2";
   if (!selected) return `${base} border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50`;
   if (state === "absent") return `${base} border-red-300 bg-red-50 text-red-900`;
   if (state === "late") return `${base} border-amber-300 bg-amber-50 text-amber-950`;
@@ -89,6 +91,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
 
   const [planMsg, setPlanMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const inScopeMembers = useMemo(
     () => membersInGenderScope(members, genderScope),
@@ -155,6 +158,15 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [hasUnsavedChanges]);
 
+  useEffect(() => {
+    if (!deleteDialogOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDeleteDialogOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleteDialogOpen]);
+
   const saveAttendanceToServer = async (): Promise<boolean> => {
     const res = await fetch(`/api/practices/${session.id}`, {
       method: "PATCH",
@@ -185,6 +197,37 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
       if (!ok) return;
     }
     router.push(`/practices/${session.id}/lineup`);
+  };
+
+  const openDeleteDialog = () => {
+    if (!isAdmin || busy) return;
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => setDeleteDialogOpen(false);
+
+  /** カスタム確認の「はい」以降（未保存・最終確認・DELETE） */
+  const runDeleteAfterFirstConfirm = async () => {
+    setDeleteDialogOpen(false);
+    if (!isAdmin) return;
+    if (hasUnsavedChanges) {
+      const ok = window.confirm(
+        "保存していない参加区分・出席の変更があります。このまま削除すると失われます。続けますか？",
+      );
+      if (!ok) return;
+    }
+    if (!window.confirm("この練習をまるごと削除しますか？記録もすべて消えます。")) return;
+    setBusy(true);
+    setPlanMsg(null);
+    const res = await fetch(`/api/practices/${session.id}`, { method: "DELETE" });
+    setBusy(false);
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      setPlanMsg(data.error ?? "削除に失敗しました");
+      return;
+    }
+    router.replace("/practices");
+    router.refresh();
   };
 
   const setAttendanceStatus = (memberId: string, status: AttendanceState) => {
@@ -266,7 +309,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
               次のページ
             </Link>
             です。「チーム編成へ」で保存して次のページに進みます。保存すると、
-            <strong className="text-zinc-800">既存のチーム編成と的中記録はすべてクリア</strong>
+            <strong className="text-zinc-800">既存のチーム編成と記録はすべてクリア</strong>
             されます。
           </p>
           <div>
@@ -290,21 +333,21 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
             <p className="mb-2 text-xs font-medium text-zinc-600">出欠（参加、またはプルダウンで区分を選択）</p>
             <div className="space-y-3">
               {attendanceMemberBlocks.map((block) => (
-                <section key={block.grade} className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-3">
-                  <div className="mb-2 flex items-center gap-2">
+                <section key={block.grade} className="rounded-lg border border-zinc-200 bg-zinc-50/60 p-2.5">
+                  <div className="mb-1.5 flex items-center gap-2">
                     <h3 className="text-sm font-semibold text-zinc-800">{block.grade}</h3>
                     <span className="text-xs text-zinc-500">{block.members.length}人</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {block.members.map((m) => {
                       const current = attendance[m.id] ?? "present";
                       return (
                         <div
                           key={m.id}
-                          className="min-w-[10.5rem] rounded-lg border border-zinc-200 bg-white px-2.5 py-2 shadow-sm"
+                          className="min-w-[8.75rem] rounded-lg border border-zinc-200 bg-white px-2 py-1.5 shadow-sm"
                         >
-                          <p className="mb-2 text-sm font-semibold text-zinc-900">{m.name}</p>
-                          <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="mb-1.5 text-xs font-semibold text-zinc-900">{m.name}</p>
+                          <div className="flex flex-wrap items-center gap-1">
                             <button
                               type="button"
                               disabled={busy}
@@ -314,7 +357,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
                               参加
                             </button>
                             <select
-                              className={`rounded-md border px-2 py-1 text-xs font-medium ${
+                              className={`rounded-md border px-1.5 py-0.5 text-xs font-medium ${
                                 current === "present" ? "border-zinc-200 bg-white text-zinc-600" : attendanceChoiceClass(current, true)
                               }`}
                               value={current === "present" ? "absent" : current}
@@ -380,10 +423,18 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
             ) : null}
           </div>
 
-          <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-4 sm:justify-between">
+            <button
+              type="button"
+              disabled={busy}
+              className={`${uiBtnDangerOutline} justify-center`}
+              onClick={openDeleteDialog}
+            >
+              練習を削除
+            </button>
             <Link
               href={`/practices/${session.id}/lineup`}
-              className={`${uiBtnSecondary} w-full justify-center sm:ml-auto sm:w-auto`}
+              className={`${uiBtnSecondary} justify-center`}
               onClick={navigateToLineup}
             >
               チーム編成へ →
@@ -419,6 +470,39 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
         </section>
       )}
 
+      {deleteDialogOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="presentation"
+          onClick={closeDeleteDialog}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-practice-dialog-title"
+            className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p
+              id="delete-practice-dialog-title"
+              className="whitespace-pre-line text-sm font-medium text-zinc-900"
+            >{`この練習を削除します。
+本当によろしいですか？`}</p>
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+              <button type="button" className={`${uiBtnSecondary} w-full sm:w-auto`} onClick={closeDeleteDialog}>
+                いいえ
+              </button>
+              <button
+                type="button"
+                className={`${uiBtnDangerSolid} w-full sm:w-auto`}
+                onClick={() => void runDeleteAfterFirstConfirm()}
+              >
+                はい
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -31,6 +31,8 @@ export const LINEUP_TEAM_INFO_OPTIONS_BY_SIZE: Record<number, string[]> = {
 export type MemberForPractice = {
   id: string;
   name: string;
+  /** ひらがな（読み）。並びに使う */
+  nameKana?: string;
   gradeYear: string;
   gender: string;
 };

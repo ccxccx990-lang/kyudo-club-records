@@ -13,7 +13,7 @@ export function PracticesInputPanel() {
           <strong className="text-zinc-900">参加区分・出席</strong>
           を確定させてください。続けて
           <strong className="text-zinc-900">チーム編成（1チーム1〜6人）</strong>
-          のページで並びを組み、最後に的中ページで記録します。一覧の確認は上部ナビの「的中記録」から行えます。
+          のページで並びを組み、最後に的中ページで記録します。一覧の確認は上部ナビの「記録」から行えます。
         </p>
       </section>
 

@@ -36,8 +36,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
     typeof body === "object" && body !== null && "role" in body
       ? String((body as { role?: unknown }).role ?? "").trim()
       : undefined;
+  const nameKana =
+    typeof body === "object" && body !== null && "nameKana" in body
+      ? String((body as { nameKana?: unknown }).nameKana ?? "").trim()
+      : undefined;
 
-  const data: { name?: string; gradeYear?: string; gender?: string; role?: string } = {};
+  const data: { name?: string; nameKana?: string; gradeYear?: string; gender?: string; role?: string } = {};
   if (name !== undefined) {
     if (!name) return NextResponse.json({ error: "名前が空です" }, { status: 400 });
     if (!isCompleteMemberDisplayName(name)) {
@@ -57,6 +61,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
       );
     }
     data.name = name;
+  }
+  if (nameKana !== undefined) {
+    data.nameKana = nameKana;
   }
   if (gradeYear !== undefined) {
     if (!isAllowedGrade(gradeYear)) {

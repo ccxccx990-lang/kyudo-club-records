@@ -174,7 +174,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   const memberRows = await prisma.member.findMany({
-    select: { id: true, name: true, gradeYear: true, gender: true },
+    select: { id: true, name: true, nameKana: true, gradeYear: true, gender: true },
   });
   const memberIdSet = new Set(memberRows.map((m) => m.id));
 
