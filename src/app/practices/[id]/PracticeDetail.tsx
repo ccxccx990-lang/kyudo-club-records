@@ -205,6 +205,20 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
 
   return (
     <div className="space-y-8">
+      {busy ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40"
+          role="status"
+          aria-live="polite"
+          aria-label="保存中"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-5 text-sm font-semibold text-zinc-900 shadow-lg">
+            <span className="h-9 w-9 animate-spin rounded-full border-4 border-zinc-200 border-t-indigo-600" />
+            <span>保存中...</span>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="min-w-0 space-y-2">
           <Link className={`${uiLinkChip} text-xs`} href="/practices">
