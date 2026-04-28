@@ -20,8 +20,12 @@ import {
   membersInGenderScope,
   orderedMemberIdsForMarks,
   parseAttendanceJson,
+  parseLineupTeamInfoJson,
+  parseLineupTeamSizesJson,
   parseLineupTeamsJson,
   parseSubstitutionsJson,
+  sanitizeLineupTeamInfos,
+  sanitizeLineupTeamSizes,
   lineupMemberIdsSelfConsistent,
   validateLineupTeams,
   type GenderScope,
@@ -31,7 +35,7 @@ import {
 import { uiBtnPrimary, uiBtnSecondary, uiBtnSmDanger, uiLinkChip } from "@/lib/uiButtons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type SessionMarksProps = {
   id: string;
@@ -42,6 +46,8 @@ export type SessionMarksProps = {
   genderScope: string;
   attendanceJson: string;
   lineupTeamsJson: string;
+  lineupTeamSizesJson: string;
+  lineupTeamInfoJson: string;
   substitutionsJson: string;
   /** チーム編成未保存時の仮チーム人数（1〜6） */
   teamSize: number;
@@ -56,12 +62,20 @@ type Props = {
   isAdmin: boolean;
 };
 
+const EMPTY_SHOTS: Shot[] = [null, null, null, null];
+
 /** 名前列・各「立目」4マス列の幅をチーム見出しと揃える */
 const MARKS_NAME_COL_CLASS =
   "sticky left-0 z-10 min-w-0 max-w-[11rem] shrink-0 basis-[min(10rem,40vw)] border-r py-1 pl-1 pr-2";
 
-/** 1立目ぶんのブロック幅（見出しと MarksRoundShotGrid で共通） */
-const MARKS_ROUND_BLOCK_CLASS = "w-[7.5rem] shrink-0 sm:w-[8.25rem]";
+/** 交代表示セル（各立目の前に常設） */
+const MARKS_SUB_CELL_CLASS = "w-[1.45rem] shrink-0 sm:w-[1.55rem]";
+
+/** 1立目ぶんの的中マス幅（4射） */
+const MARKS_SHOTS_BLOCK_CLASS = "w-[7.5rem] shrink-0 sm:w-[8.25rem]";
+
+/** 交代セル＋的中マスを合わせた1立目ぶんの幅 */
+const MARKS_ROUND_BLOCK_CLASS = "w-[8.95rem] shrink-0 sm:w-[9.8rem]";
 
 /** 右端の合計列の幅（見出し・データで共通） */
 const MARKS_TOTAL_COL_CLASS =
@@ -70,8 +84,8 @@ const MARKS_TOTAL_COL_CLASS =
 /** チーム見出し・未割当見出しで、下の的中マスと同じ位置に「1立目」…を並べる */
 function MarksRoundLabelsStrip({ rounds }: { rounds: number[] }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-center overflow-x-auto">
-      <div className="inline-flex max-w-full flex-nowrap items-center justify-center gap-0">
+    <div className="flex shrink-0 items-center justify-start">
+      <div className="inline-flex flex-nowrap items-center justify-start gap-0">
         {rounds.map((r) => (
           <div
             key={r}
@@ -99,7 +113,7 @@ function MarksRoundShotGrid({
   isAdmin: boolean;
   onCycle: (shotIdx: number) => void;
 }) {
-  const sizing = MARKS_ROUND_BLOCK_CLASS;
+  const sizing = MARKS_SHOTS_BLOCK_CLASS;
   const frame =
     roundIndex > 1
       ? `inline-grid ${sizing} grid-cols-4 border-t border-b border-r border-zinc-500 border-l-2 border-l-zinc-700`
@@ -112,7 +126,7 @@ function MarksRoundShotGrid({
           type="button"
           disabled={!isAdmin}
           onClick={() => onCycle(idx)}
-          className={`flex min-h-7 w-full min-w-0 items-center justify-center rounded-none border-r border-zinc-400 bg-white text-xs leading-none text-zinc-900 last:border-r-0 sm:min-h-8 sm:text-sm ${
+          className={`flex min-h-8 w-full min-w-0 items-center justify-center rounded-none border-r border-zinc-400 bg-white text-xs leading-none text-zinc-900 last:border-r-0 sm:min-h-9 sm:text-sm ${
             isAdmin
               ? "cursor-pointer hover:bg-sky-50 active:bg-sky-100 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-0"
               : "cursor-default bg-zinc-50 text-zinc-600"
@@ -138,50 +152,75 @@ function splitDisplayName(name: string): { familyName: string; givenInitial: str
   return { familyName, givenInitial: givenName.charAt(0) };
 }
 
+function shotsHaveMarks(slots: Shot[] | undefined): boolean {
+  return !!slots && slots.some((shot) => shot !== null);
+}
+
 function SubstitutionNameMarker({
   name,
-  baseName,
+  showGivenInitial,
 }: {
-  name: string;
-  baseName: string;
+  name: string | null;
+  showGivenInitial: boolean;
 }) {
+  if (!name) {
+    return <div className={`${MARKS_SUB_CELL_CLASS} min-h-8 border-l border-zinc-200 bg-white sm:min-h-9`} aria-hidden />;
+  }
   const sub = splitDisplayName(name);
-  const base = splitDisplayName(baseName);
-  const needsInitial = sub.familyName === base.familyName && sub.givenInitial.length > 0;
+  const needsInitial = showGivenInitial && sub.givenInitial.length > 0;
+  const displayChars = [...Array.from(sub.familyName), ...(needsInitial ? [`(${sub.givenInitial})`] : [])];
+  const markerWidthRem = Math.min(2.15, Math.max(1.05, 0.46 * displayChars.length + 0.34));
+  const mainFontRem = Math.max(0.52, Math.min(0.72, 2.15 / displayChars.length));
+  const initialFontRem = Math.max(0.46, mainFontRem * 0.82);
   return (
-    <div className="flex min-h-7 shrink-0 flex-col items-center justify-center border-l-2 border-l-indigo-700 bg-indigo-50 px-1 text-[0.68rem] font-bold leading-none text-indigo-900 sm:min-h-8">
-      <span className="[writing-mode:vertical-rl]">{sub.familyName}</span>
-      {needsInitial ? <span className="mt-1 text-[0.6rem]">({sub.givenInitial})</span> : null}
+    <div
+      className="flex min-h-8 shrink-0 items-stretch justify-center border-l-2 border-l-indigo-700 bg-indigo-50 px-0 text-center font-bold leading-none text-indigo-900 sm:min-h-9"
+      style={{ width: `${markerWidthRem}rem` }}
+    >
+      <span
+        className="grid h-full w-full items-center justify-items-center"
+        style={{ gridTemplateRows: `repeat(${displayChars.length}, minmax(0, 1fr))` }}
+      >
+        {displayChars.map((char, idx) => (
+          <span
+            key={`${char}-${idx}`}
+            className="block w-full text-center leading-none"
+            style={{ fontSize: `${char.startsWith("(") ? initialFontRem : mainFontRem}rem` }}
+          >
+            {char}
+          </span>
+        ))}
+      </span>
     </div>
   );
 }
 
-/** 部員行の右端 〇の数／入力枠の総マス（立目×4） */
+/** 部員行の右端 〇の数／記録した射数（・は中抜け） */
 function MarksMemberTotalsCell({
   memberId,
   rounds,
   grid,
   variant,
-  effectiveMemberIdForRound,
 }: {
   memberId: string;
   rounds: number[];
   grid: Record<string, Shot[]>;
   variant: "zinc" | "amber";
-  effectiveMemberIdForRound: (memberId: string, roundIndex: number) => string;
 }) {
-  const totalSlots = rounds.length * 4;
-  const hits = rounds.reduce((sum, roundIndex) => {
-    const effectiveMemberId = effectiveMemberIdForRound(memberId, roundIndex);
-    return sum + memberMarksHitsOverTotalSlots(effectiveMemberId, 1, {
-      [cellKey(effectiveMemberId, 1)]: grid[cellKey(effectiveMemberId, roundIndex)] ?? [null, null, null, null],
-    }).hits;
-  }, 0);
+  const totals = rounds.reduce(
+    (sum, roundIndex) => {
+      const roundTotals = memberMarksHitsOverTotalSlots(memberId, 1, {
+        [cellKey(memberId, 1)]: grid[cellKey(memberId, roundIndex)] ?? [null, null, null, null],
+      });
+      return { hits: sum.hits + roundTotals.hits, totalSlots: sum.totalSlots + roundTotals.totalSlots };
+    },
+    { hits: 0, totalSlots: 0 },
+  );
   const borderL = variant === "amber" ? "border-l border-amber-200/90" : "border-l border-zinc-300";
   return (
     <div className={`${MARKS_TOTAL_COL_CLASS} bg-white ${borderL}`}>
       <span className="text-sm font-semibold tabular-nums text-zinc-900">
-        {hits}/{totalSlots}
+        {totals.hits}/{totals.totalSlots}
       </span>
     </div>
   );
@@ -190,50 +229,46 @@ function MarksMemberTotalsCell({
 /** 名前列＋立目ブロックをチーム枠内で中央寄せ */
 function MarksMemberMarksRow({
   memberId,
-  baseName,
   label,
   rounds,
   grid,
   isAdmin,
   cycle,
   variant,
-  effectiveMemberIdForRound,
   substitutionMarkerNameForRound,
+  shouldShowGivenInitial,
   hideTopBorder,
 }: {
   memberId: string;
-  baseName: string;
   label: ReactNode;
   rounds: number[];
   grid: Record<string, Shot[]>;
   isAdmin: boolean;
   cycle: (memberId: string, roundIndex: number, shotIdx: number) => void;
   variant: "zinc" | "amber";
-  effectiveMemberIdForRound: (memberId: string, roundIndex: number) => string;
   substitutionMarkerNameForRound: (memberId: string, roundIndex: number) => string | null;
+  shouldShowGivenInitial: (name: string) => boolean;
   hideTopBorder?: boolean;
 }) {
   const rowBorder =
     hideTopBorder ? "" : variant === "amber" ? "border-t border-amber-100" : "border-t border-zinc-200";
   const nameBorder = variant === "amber" ? "border-amber-200/90" : "border-zinc-300";
   return (
-    <div className={`flex min-w-0 gap-0 bg-white px-1 py-1 ${rowBorder}`}>
+    <div className={`flex w-max min-w-full gap-0 bg-white px-1 py-1 ${rowBorder}`}>
       <div className={`${MARKS_NAME_COL_CLASS} bg-white font-medium text-zinc-900 ${nameBorder}`}>{label}</div>
-      <div className="flex min-w-0 flex-1 items-center justify-center overflow-x-auto">
-        <div className="inline-flex max-w-full flex-nowrap items-stretch justify-center gap-0">
+      <div className="flex shrink-0 items-center justify-start">
+        <div className="inline-flex flex-nowrap items-stretch justify-start gap-0">
           {rounds.map((r) => {
-            const effectiveMemberId = effectiveMemberIdForRound(memberId, r);
             const markerName = substitutionMarkerNameForRound(memberId, r);
-            const k = cellKey(effectiveMemberId, r);
-            const slots = grid[k] ?? [null, null, null, null];
+            const slots = grid[cellKey(memberId, r)] ?? [null, null, null, null];
             return (
-              <div key={r} className="inline-flex items-stretch">
-                {markerName ? <SubstitutionNameMarker name={markerName} baseName={baseName} /> : null}
+              <div key={r} className={`${MARKS_ROUND_BLOCK_CLASS} inline-flex items-stretch`}>
+                <SubstitutionNameMarker name={markerName} showGivenInitial={markerName ? shouldShowGivenInitial(markerName) : false} />
                 <MarksRoundShotGrid
                   roundIndex={r}
                   slots={slots}
                   isAdmin={isAdmin}
-                  onCycle={(idx) => cycle(effectiveMemberId, r, idx)}
+                  onCycle={(idx) => cycle(memberId, r, idx)}
                 />
               </div>
             );
@@ -245,7 +280,6 @@ function MarksMemberMarksRow({
         rounds={rounds}
         grid={grid}
         variant={variant}
-        effectiveMemberIdForRound={effectiveMemberIdForRound}
       />
     </div>
   );
@@ -262,6 +296,16 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
     [session.attendanceJson],
   );
   const lineupTeamsRaw = useMemo(() => parseLineupTeamsJson(session.lineupTeamsJson), [session.lineupTeamsJson]);
+  const lineupTeamInfos = useMemo(
+    () =>
+      sanitizeLineupTeamInfos(
+        lineupTeamsRaw,
+        parseLineupTeamInfoJson(session.lineupTeamInfoJson),
+        members,
+        sanitizeLineupTeamSizes(lineupTeamsRaw, parseLineupTeamSizesJson(session.lineupTeamSizesJson), session.teamSize),
+      ),
+    [lineupTeamsRaw, members, session.lineupTeamInfoJson, session.lineupTeamSizesJson, session.teamSize],
+  );
   const serverSubstitutions = useMemo(
     () => parseSubstitutionsJson(session.substitutionsJson).filter((s) => s.roundIndex <= session.roundCount),
     [session.substitutionsJson, session.roundCount],
@@ -343,6 +387,18 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   );
 
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
+  const duplicateFamilyNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const m of members) {
+      const familyName = splitDisplayName(m.name).familyName;
+      counts.set(familyName, (counts.get(familyName) ?? 0) + 1);
+    }
+    return new Set([...counts.entries()].filter(([, count]) => count > 1).map(([familyName]) => familyName));
+  }, [members]);
+  const shouldShowGivenInitial = useCallback(
+    (name: string) => duplicateFamilyNames.has(splitDisplayName(name).familyName),
+    [duplicateFamilyNames],
+  );
 
   const membersNotInLineupTeams = useMemo(
     () => orderedMembers.filter((m) => !lineupMemberIdSet.has(m.id)),
@@ -350,6 +406,10 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   );
 
   const rounds = useMemo(() => Array.from({ length: session.roundCount }, (_, i) => i + 1), [session.roundCount]);
+  const recordsResetKey = useMemo(
+    () => JSON.stringify({ orderedIds, roundCount: session.roundCount, records }),
+    [orderedIds, records, session.roundCount],
+  );
 
   const [grid, setGrid] = useState<Record<string, Shot[]>>(() =>
     buildGridFromOrdered(orderedMembers, session.roundCount, records),
@@ -364,33 +424,78 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   const [marksMsg, setMarksMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const serverGrid = useMemo(
-    () => buildGridFromOrdered(orderedMembers, session.roundCount, records),
-    [orderedMembers, session.roundCount, records],
-  );
-
-  const marksDirty = useMemo(() => !gridsEqual(grid, serverGrid), [grid, serverGrid]);
-
-  useEffect(() => {
-    setGrid(buildGridFromOrdered(orderedMembers, session.roundCount, records));
-    setSavedKeys(initialSavedKeys(records));
-  }, [orderedMembers, session.roundCount, records]);
-
   useEffect(() => {
     setSubstitutions(serverSubstitutions);
   }, [serverSubstitutions]);
 
-  const effectiveMemberIdForRound = useCallback(
-    (memberId: string, roundIndex: number): string => {
-      let current = memberId;
+  const slotOccupantsForRound = useCallback(
+    (roundIndex: number, extraMemberIds: readonly string[] = []): Map<string, string> => {
+      const slotIds = new Set(orderedMembers.map((m) => m.id));
+      for (const sub of substitutions) {
+        slotIds.add(sub.outMemberId);
+        slotIds.add(sub.inMemberId);
+      }
+      for (const id of extraMemberIds) slotIds.add(id);
+      const slotOccupants = new Map([...slotIds].map((id) => [id, id]));
+
       for (const sub of substitutions) {
         if (roundIndex < sub.roundIndex) continue;
-        if (current === sub.outMemberId) current = sub.inMemberId;
+        const outMemberId = slotOccupants.get(sub.outMemberId) ?? sub.outMemberId;
+        const inMemberId = slotOccupants.get(sub.inMemberId) ?? sub.inMemberId;
+        slotOccupants.set(sub.outMemberId, inMemberId);
+        slotOccupants.set(sub.inMemberId, outMemberId);
       }
-      return current;
+      return slotOccupants;
     },
-    [substitutions],
+    [orderedMembers, substitutions],
   );
+
+  const effectiveMemberIdForRound = useCallback(
+    (memberId: string, roundIndex: number): string => slotOccupantsForRound(roundIndex, [memberId]).get(memberId) ?? memberId,
+    [slotOccupantsForRound],
+  );
+
+  const buildMarksGrid = useCallback(
+    (sourceRecords: MarksRecord[]): Record<string, Shot[]> => {
+      const nextGrid = buildGridFromOrdered(orderedMembers, session.roundCount, sourceRecords);
+
+      // 以前の実装では交代後メンバーIDへ的中を保存していたため、
+      // 元の行が空ならその記録を表示だけ救済する（保存時の自動クリアはしない）。
+      for (const m of orderedMembers) {
+        for (let r = 1; r <= session.roundCount; r++) {
+          const ownKey = cellKey(m.id, r);
+          if (shotsHaveMarks(nextGrid[ownKey])) continue;
+          const effectiveMemberId = effectiveMemberIdForRound(m.id, r);
+          if (effectiveMemberId === m.id) continue;
+          const fallbackKey = cellKey(effectiveMemberId, r);
+          if (shotsHaveMarks(nextGrid[fallbackKey])) {
+            nextGrid[ownKey] = [...(nextGrid[fallbackKey] ?? EMPTY_SHOTS)];
+          }
+        }
+      }
+
+      return nextGrid;
+    },
+    [effectiveMemberIdForRound, orderedMembers, session.roundCount],
+  );
+  const latestRecordsRef = useRef(records);
+  const latestBuildMarksGridRef = useRef(buildMarksGrid);
+
+  const serverGrid = useMemo(() => buildMarksGrid(records), [buildMarksGrid, records]);
+
+  const marksDirty = useMemo(() => !gridsEqual(grid, serverGrid), [grid, serverGrid]);
+
+  useEffect(() => {
+    latestRecordsRef.current = records;
+    latestBuildMarksGridRef.current = buildMarksGrid;
+  }, [buildMarksGrid, records]);
+
+  useEffect(() => {
+    const latestRecords = latestRecordsRef.current;
+    setGrid(latestBuildMarksGridRef.current(latestRecords));
+    setSavedKeys(initialSavedKeys(latestRecords));
+    // 交代だけの変更では、保存前の的中入力を保持する。
+  }, [recordsResetKey]);
 
   const substitutionMarkerNameForRound = useCallback(
     (memberId: string, roundIndex: number): string | null => {
@@ -400,6 +505,45 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       return memberById.get(current)?.name ?? current;
     },
     [effectiveMemberIdForRound, memberById],
+  );
+
+  const substitutionSummariesForMember = useCallback(
+    (memberId: string): string[] => {
+      const summaries: string[] = [];
+      let prevMemberId = memberId;
+      for (const roundIndex of rounds) {
+        const currentMemberId = effectiveMemberIdForRound(memberId, roundIndex);
+        if (currentMemberId === prevMemberId) continue;
+        summaries.push(`${roundIndex}立目〜 ${memberById.get(currentMemberId)?.name ?? currentMemberId}`);
+        prevMemberId = currentMemberId;
+      }
+      return summaries;
+    },
+    [effectiveMemberIdForRound, memberById, rounds],
+  );
+
+  const memberLabel = useCallback(
+    (m: MarksMember): ReactNode => {
+      const summaries = substitutionSummariesForMember(m.id);
+      return (
+        <>
+          <span className="mr-1 text-xs text-zinc-500">
+            {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
+          </span>
+          <span>{m.name}</span>
+          {summaries.length > 0 ? (
+            <span className="mt-0.5 block text-[0.68rem] font-normal leading-tight text-indigo-700">
+              {summaries.map((summary) => (
+                <span key={summary} className="block">
+                  {summary}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </>
+      );
+    },
+    [substitutionSummariesForMember],
   );
 
   const replacementCandidates = useMemo(() => {
@@ -440,7 +584,6 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       return false;
     }
     setSubstitutions(next);
-    router.refresh();
     return true;
   };
 
@@ -455,11 +598,38 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       setSubstitutionMsg("交代する2人を選んでください");
       return;
     }
+    const previousRoundIndex = Math.max(0, roundIndex - 1);
+    const extraMemberIds = [subOutMemberId, subInMemberId];
+    const beforeRoundOccupants = slotOccupantsForRound(previousRoundIndex, extraMemberIds);
+    const currentRoundOccupants = slotOccupantsForRound(roundIndex, extraMemberIds);
+    const slotIds = [...currentRoundOccupants.keys()];
+    const outSlotMemberId = slotIds.find((id) => currentRoundOccupants.get(id) === subOutMemberId) ?? subOutMemberId;
+    const inSlotMemberId = slotIds.find((id) => currentRoundOccupants.get(id) === subInMemberId) ?? subInMemberId;
+    if (outSlotMemberId === inSlotMemberId) {
+      setSubstitutionMsg("交代する2人を選んでください");
+      return;
+    }
+    const desiredRoundOccupants = new Map(currentRoundOccupants);
+    desiredRoundOccupants.set(outSlotMemberId, currentRoundOccupants.get(inSlotMemberId) ?? inSlotMemberId);
+    desiredRoundOccupants.set(inSlotMemberId, currentRoundOccupants.get(outSlotMemberId) ?? outSlotMemberId);
+
+    const workingOccupants = new Map(beforeRoundOccupants);
+    const nextSameRoundSubstitutions: PracticeSubstitution[] = [];
+    for (const slotId of slotIds) {
+      const wantedMemberId = desiredRoundOccupants.get(slotId) ?? slotId;
+      if ((workingOccupants.get(slotId) ?? slotId) === wantedMemberId) continue;
+      const swapSlotId = slotIds.find((id) => (workingOccupants.get(id) ?? id) === wantedMemberId);
+      if (!swapSlotId) continue;
+      const currentMemberId = workingOccupants.get(slotId) ?? slotId;
+      const swapMemberId = workingOccupants.get(swapSlotId) ?? swapSlotId;
+      nextSameRoundSubstitutions.push({ roundIndex, outMemberId: slotId, inMemberId: swapSlotId });
+      workingOccupants.set(slotId, swapMemberId);
+      workingOccupants.set(swapSlotId, currentMemberId);
+    }
+
     const next = [
-      ...substitutions.filter(
-        (s) => !(s.roundIndex === roundIndex && s.outMemberId === subOutMemberId),
-      ),
-      { roundIndex, outMemberId: subOutMemberId, inMemberId: subInMemberId },
+      ...substitutions.filter((s) => s.roundIndex !== roundIndex),
+      ...nextSameRoundSubstitutions,
     ].sort((a, b) => a.roundIndex - b.roundIndex);
     const ok = await saveSubstitutionsToServer(next);
     if (ok) setSubstitutionDialogOpen(false);
@@ -511,34 +681,16 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
 
     const items: { memberId: string; roundIndex: number; marks: string }[] = [];
     const clears: { memberId: string; roundIndex: number }[] = [];
-    const producedKeys = new Set<string>();
 
     for (const m of orderedMembers) {
       for (let r = 1; r <= session.roundCount; r++) {
-        const effectiveMemberId = effectiveMemberIdForRound(m.id, r);
-        const k = cellKey(effectiveMemberId, r);
-        producedKeys.add(k);
+        const k = cellKey(m.id, r);
         const slots = grid[k] ?? [null, null, null, null];
         const marks = slotsToMarks(slots);
         const had = savedKeys.has(k);
-        if (marks) items.push({ memberId: effectiveMemberId, roundIndex: r, marks });
-        else if (had) clears.push({ memberId: effectiveMemberId, roundIndex: r });
+        if (marks) items.push({ memberId: m.id, roundIndex: r, marks });
+        else if (had) clears.push({ memberId: m.id, roundIndex: r });
       }
-    }
-
-    const relevantMemberIds = new Set(orderedIds);
-    for (const sub of substitutions) {
-      relevantMemberIds.add(sub.outMemberId);
-      relevantMemberIds.add(sub.inMemberId);
-    }
-    for (const savedKey of savedKeys) {
-      if (producedKeys.has(savedKey)) continue;
-      const splitAt = savedKey.lastIndexOf("-");
-      if (splitAt <= 0) continue;
-      const memberId = savedKey.slice(0, splitAt);
-      const roundIndex = Number(savedKey.slice(splitAt + 1));
-      if (!relevantMemberIds.has(memberId) || !Number.isFinite(roundIndex)) continue;
-      clears.push({ memberId, roundIndex });
     }
 
     const res = await fetch(`/api/practices/${session.id}/records`, {
@@ -619,22 +771,22 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
         <p className="text-sm text-zinc-600">
           {useLineupPreviewLayout
             ? isSyntheticLineupPreview
-              ? `チーム編成が未保存のため、出席者を「チーム人数（${session.teamSize}人）」と「最大的数（${session.maxMato}的）」に沿った仮の立ち・チームで区切っています。チーム編成を保存すると保存どおりの並びに切り替わります。各マスは「・ → 〇 → × → ・」の順で切り替わります。4射そろった行だけが保存されます。`
+              ? `チーム編成が未保存のため、出席者を「チーム人数（${session.teamSize}人）」と「最大的数（${session.maxMato}的）」に沿った仮の立ち・チームで区切っています。チーム編成を保存すると保存どおりの並びに切り替わります。各マスは「・ → 〇 → × → ・」の順で切り替わります。「・」は中抜けとして分母から除外されます。`
               : lineupFullyValid
-                ? "並びと区切りはチーム編成の部員プレビューと同じです。各マスは「・ → 〇 → × → ・」の順で切り替わります。4射そろった行だけが保存されます。"
-                : "チーム編成に一部の出席者のみが入っています。チームに入っている人は第〇立ち・チーム順で、その他は下の「チーム未割当」に続きます。各マスは「・ → 〇 → × → ・」の順で切り替わります。4射そろった行だけが保存されます。"
-            : "チームに対象外の ID が含まれるなど、区切り表示に使えないチームデータのときは、出席者を学年・男女・名前順の1列で表示します。各マスは「・ → 〇 → × → ・」の順で切り替わります。4射そろった行だけが保存されます。"}
+                ? "並びと区切りはチーム編成の部員プレビューと同じです。各マスは「・ → 〇 → × → ・」の順で切り替わります。「・」は中抜けとして分母から除外されます。"
+                : "チーム編成に一部の出席者のみが入っています。チームに入っている人は第〇立ち・チーム順で、その他は下の「チーム未割当」に続きます。各マスは「・ → 〇 → × → ・」の順で切り替わります。「・」は中抜けとして分母から除外されます。"
+            : "チームに対象外の ID が含まれるなど、区切り表示に使えないチームデータのときは、出席者を学年・男女・名前順の1列で表示します。各マスは「・ → 〇 → × → ・」の順で切り替わります。「・」は中抜けとして分母から除外されます。"}
         </p>
 
         <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white shadow-sm">
           {orderedMembers.length === 0 ? (
             <p className="px-4 py-6 text-sm text-zinc-500">出席者がいません。参加区分・出席を確認してください。</p>
           ) : useLineupPreviewLayout && roundSections ? (
-            <div className="min-w-0 space-y-6 p-2 text-sm sm:p-3">
+            <div className="w-max min-w-full space-y-6 p-2 text-sm sm:p-3">
               {roundSections.map((sec, si) => (
                 <div
                   key={`round-sec-${sec.roundLabel}-${si}`}
-                  className="rounded-xl border-2 border-indigo-300/80 bg-gradient-to-b from-indigo-50/50 to-white p-3 shadow-sm ring-1 ring-indigo-100/80"
+                  className="w-max min-w-full rounded-xl border-2 border-indigo-300/80 bg-gradient-to-b from-indigo-50/50 to-white p-3 shadow-sm ring-1 ring-indigo-100/80"
                 >
                   <div className="mb-3 border-b-2 border-indigo-200/90 pb-2 text-center text-sm font-bold tracking-wide text-indigo-950">
                     第{sec.roundLabel}立ち
@@ -643,13 +795,18 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                     {sec.teams.map((team, ti) => (
                       <div
                         key={`team-${team.teamOrdinal}-${si}-${ti}`}
-                        className="overflow-hidden rounded-lg border border-zinc-300 bg-zinc-50 shadow-sm"
+                        className="w-max min-w-full overflow-hidden rounded-lg border border-zinc-300 bg-zinc-50 shadow-sm"
                       >
-                        <div className="flex min-w-0 gap-0 border-b border-zinc-300 bg-zinc-200/90 px-1 py-1.5 text-xs font-bold text-zinc-900">
+                        <div className="flex w-max min-w-full gap-0 border-b border-zinc-300 bg-zinc-200/90 px-1 py-1.5 text-xs font-bold text-zinc-900">
                           <div
                             className={`${MARKS_NAME_COL_CLASS} flex items-center border-zinc-300/90 bg-zinc-200/90 py-0.5 font-bold text-zinc-900`}
                           >
                             チーム {team.teamOrdinal}
+                            {lineupTeamInfos[team.teamOrdinal - 1] ? (
+                              <span className="ml-1 text-[0.68rem] font-semibold text-indigo-800">
+                                {lineupTeamInfos[team.teamOrdinal - 1]}
+                              </span>
+                            ) : null}
                           </div>
                           <MarksRoundLabelsStrip rounds={rounds} />
                           <MarksTotalsHeaderSpacer tone="zinc" />
@@ -661,22 +818,14 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                             <MarksMemberMarksRow
                               key={mid}
                               memberId={m.id}
-                              baseName={m.name}
-                              label={
-                                <>
-                                  <span className="mr-1 text-xs text-zinc-500">
-                                    {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
-                                  </span>
-                                  {m.name}
-                                </>
-                              }
+                              label={memberLabel(m)}
                               rounds={rounds}
                               grid={grid}
                               isAdmin={isAdmin}
                               cycle={cycle}
                               variant="zinc"
-                              effectiveMemberIdForRound={effectiveMemberIdForRound}
                               substitutionMarkerNameForRound={substitutionMarkerNameForRound}
+                              shouldShowGivenInitial={shouldShowGivenInitial}
                             />
                           );
                         })}
@@ -690,8 +839,8 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                   <div className="mb-3 border-b-2 border-amber-200/80 pb-2 text-center text-sm font-bold text-amber-950">
                     チーム未割当（出席）
                   </div>
-                  <div className="space-y-0 rounded-lg border border-amber-200/80 bg-white">
-                    <div className="flex min-w-0 gap-0 border-b border-amber-200/80 bg-amber-100/50 px-1 py-1.5 text-xs font-bold text-amber-950">
+                  <div className="w-max min-w-full space-y-0 overflow-hidden rounded-lg border border-amber-200/80 bg-white">
+                    <div className="flex w-max min-w-full gap-0 border-b border-amber-200/80 bg-amber-100/50 px-1 py-1.5 text-xs font-bold text-amber-950">
                       <div
                         className={`${MARKS_NAME_COL_CLASS} flex items-center border-amber-300/80 bg-amber-100/50 py-0.5`}
                       >
@@ -704,22 +853,14 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                       <MarksMemberMarksRow
                         key={m.id}
                         memberId={m.id}
-                        baseName={m.name}
-                        label={
-                          <>
-                            <span className="mr-1 text-xs text-zinc-500">
-                              {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
-                            </span>
-                            {m.name}
-                          </>
-                        }
+                        label={memberLabel(m)}
                         rounds={rounds}
                         grid={grid}
                         isAdmin={isAdmin}
                         cycle={cycle}
                         variant="amber"
-                        effectiveMemberIdForRound={effectiveMemberIdForRound}
                         substitutionMarkerNameForRound={substitutionMarkerNameForRound}
+                        shouldShowGivenInitial={shouldShowGivenInitial}
                         hideTopBorder={mi === 0}
                       />
                     ))}
@@ -728,8 +869,8 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
               ) : null}
             </div>
           ) : (
-            <div className="text-sm">
-              <div className="flex min-w-0 gap-0 border-b border-zinc-200 bg-zinc-50 px-1 py-1.5">
+            <div className="w-max min-w-full text-sm">
+              <div className="flex w-max min-w-full gap-0 border-b border-zinc-200 bg-zinc-50 px-1 py-1.5">
                 <div
                   className={`${MARKS_NAME_COL_CLASS} border-zinc-300 bg-zinc-50 py-0.5 text-xs font-medium text-zinc-500`}
                   aria-hidden
@@ -743,22 +884,14 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                 <MarksMemberMarksRow
                   key={m.id}
                   memberId={m.id}
-                  baseName={m.name}
-                  label={
-                    <>
-                      <span className="mr-1 text-xs text-zinc-500">
-                        {m.gender === "女" ? "女" : m.gender === "男" ? "男" : ""}
-                      </span>
-                      {m.name}
-                    </>
-                  }
+                  label={memberLabel(m)}
                   rounds={rounds}
                   grid={grid}
                   isAdmin={isAdmin}
                   cycle={cycle}
                   variant="zinc"
-                  effectiveMemberIdForRound={effectiveMemberIdForRound}
                   substitutionMarkerNameForRound={substitutionMarkerNameForRound}
+                  shouldShowGivenInitial={shouldShowGivenInitial}
                   hideTopBorder={mi === 0}
                 />
               ))}
@@ -770,15 +903,22 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
             <p className="font-semibold">交代一覧</p>
             <ul className="mt-1 space-y-1">
               {substitutions.map((s) => (
-                <li key={`${s.roundIndex}-${s.outMemberId}-${s.inMemberId}`} className="flex flex-wrap items-center gap-2">
-                  <span>
-                    {s.roundIndex}立目〜 {memberById.get(s.outMemberId)?.name ?? s.outMemberId} →{" "}
-                    {memberById.get(s.inMemberId)?.name ?? s.inMemberId}
+                <li
+                  key={`${s.roundIndex}-${s.outMemberId}-${s.inMemberId}`}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <span className="min-w-0">
+                    {s.roundIndex}立目〜{" "}
+                    {memberById.get(effectiveMemberIdForRound(s.outMemberId, s.roundIndex - 1))?.name ??
+                      effectiveMemberIdForRound(s.outMemberId, s.roundIndex - 1)}{" "}
+                    →{" "}
+                    {memberById.get(effectiveMemberIdForRound(s.inMemberId, s.roundIndex - 1))?.name ??
+                      effectiveMemberIdForRound(s.inMemberId, s.roundIndex - 1)}
                   </span>
                   {isAdmin ? (
                     <button
                       type="button"
-                      className={uiBtnSmDanger}
+                      className={`${uiBtnSmDanger} shrink-0`}
                       disabled={busy}
                       onClick={() => void removeSubstitution(s)}
                     >

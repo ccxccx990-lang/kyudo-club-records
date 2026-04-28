@@ -73,9 +73,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "sessionKind は joint か match です" }, { status: 400 });
   }
 
+  const memoForSave = memo.trim() ? memo : `最大的数: ${maxMato}的 / 立ち数: ${roundCount}`;
+
   try {
     const session = await prisma.practiceSession.create({
-      data: { practiceDate, memo, roundCount, maxMato, sessionKind },
+      data: { practiceDate, memo: memoForSave, roundCount, maxMato, sessionKind },
     });
     return NextResponse.json({ session }, { status: 201 });
   } catch (e) {

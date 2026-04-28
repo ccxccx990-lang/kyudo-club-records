@@ -73,6 +73,8 @@ export default async function PracticeMarksPage({ params }: PageProps) {
           genderScope: sessionRest.genderScope,
           attendanceJson: sessionRest.attendanceJson,
           lineupTeamsJson: sessionRest.lineupTeamsJson,
+          lineupTeamSizesJson: sessionRest.lineupTeamSizesJson,
+          lineupTeamInfoJson: sessionRest.lineupTeamInfoJson,
           substitutionsJson: sessionRest.substitutionsJson,
           teamSize: sessionRest.teamSize,
           maxMato: sessionRest.maxMato,

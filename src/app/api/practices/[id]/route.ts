@@ -2,14 +2,26 @@ import { NextResponse } from "next/server";
 import { sortMembers } from "@/lib/memberFields";
 import {
   isGenderScope,
+  isAttendanceState,
+  isAbsentReason,
   membersInGenderScope,
+  parseAbsentReasonsJson,
   parseAttendanceJson,
+  parseLineupTeamInfoJson,
+  parseLineupTeamSizesJson,
   parseLineupTeamsJson,
   parseSubstitutionsJson,
+  sanitizeAbsentReasons,
+  sanitizeLineupTeamInfos,
+  sanitizeLineupTeamSizes,
+  stringifyAbsentReasons,
   stringifyAttendance,
+  stringifyLineupTeamInfos,
+  stringifyLineupTeamSizes,
   stringifyLineupTeams,
   stringifySubstitutions,
   validateLineupTeams,
+  type AbsentReason,
   type AttendanceState,
   type GenderScope,
   type PracticeSubstitution,
@@ -87,6 +99,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     typeof body === "object" && body !== null && "attendance" in body
       ? (body as { attendance?: unknown }).attendance
       : undefined;
+  const absentReasonsUnknown =
+    typeof body === "object" && body !== null && "absentReasons" in body
+      ? (body as { absentReasons?: unknown }).absentReasons
+      : undefined;
   const lineupTeamsUnknown =
     typeof body === "object" && body !== null && "lineupTeams" in body
       ? (body as { lineupTeams?: unknown }).lineupTeams
@@ -94,6 +110,14 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const teamSizeRaw =
     typeof body === "object" && body !== null && "teamSize" in body
       ? Number((body as { teamSize?: unknown }).teamSize)
+      : undefined;
+  const lineupTeamInfosUnknown =
+    typeof body === "object" && body !== null && "lineupTeamInfos" in body
+      ? (body as { lineupTeamInfos?: unknown }).lineupTeamInfos
+      : undefined;
+  const lineupTeamSizesUnknown =
+    typeof body === "object" && body !== null && "lineupTeamSizes" in body
+      ? (body as { lineupTeamSizes?: unknown }).lineupTeamSizes
       : undefined;
   const maxMatoRaw =
     typeof body === "object" && body !== null && "maxMato" in body
@@ -114,7 +138,10 @@ export async function PATCH(req: Request, ctx: Ctx) {
     roundCount?: number;
     genderScope?: string;
     attendanceJson?: string;
+    absentReasonsJson?: string;
     lineupTeamsJson?: string;
+    lineupTeamSizesJson?: string;
+    lineupTeamInfoJson?: string;
     teamSize?: number;
     maxMato?: number;
     sessionKind?: string;
@@ -163,6 +190,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   let nextAttendance = parseAttendanceJson(sessionRow.attendanceJson);
+  let nextAbsentReasons = parseAbsentReasonsJson(sessionRow.absentReasonsJson);
   if (attendanceUnknown !== undefined) {
     if (typeof attendanceUnknown !== "object" || attendanceUnknown === null) {
       return NextResponse.json({ error: "attendance はオブジェクトで送ってください" }, { status: 400 });
@@ -173,10 +201,26 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const sanitized: Record<string, AttendanceState> = {};
     for (const [k, v] of Object.entries(attendanceUnknown as Record<string, unknown>)) {
       if (!memberIdSet.has(k) || !inScopeIds.has(k)) continue;
-      if (v === "present" || v === "absent") sanitized[k] = v;
+      if (isAttendanceState(v)) sanitized[k] = v;
     }
     nextAttendance = sanitized;
     data.attendanceJson = stringifyAttendance(sanitized);
+  }
+
+  if (absentReasonsUnknown !== undefined) {
+    if (typeof absentReasonsUnknown !== "object" || absentReasonsUnknown === null) {
+      return NextResponse.json({ error: "absentReasons はオブジェクトで送ってください" }, { status: 400 });
+    }
+    const sanitized: Record<string, AbsentReason> = {};
+    for (const [k, v] of Object.entries(absentReasonsUnknown as Record<string, unknown>)) {
+      if (!memberIdSet.has(k)) continue;
+      if (isAbsentReason(v)) sanitized[k] = v;
+    }
+    nextAbsentReasons = sanitized;
+  }
+  if (attendanceUnknown !== undefined || absentReasonsUnknown !== undefined) {
+    nextAbsentReasons = sanitizeAbsentReasons(nextAbsentReasons, nextAttendance, memberIdSet);
+    data.absentReasonsJson = stringifyAbsentReasons(nextAbsentReasons);
   }
 
   if (teamSizeRaw !== undefined) {
@@ -203,6 +247,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   let nextLineupTeams = parseLineupTeamsJson(sessionRow.lineupTeamsJson);
+  let nextLineupTeamSizes = sanitizeLineupTeamSizes(
+    nextLineupTeams,
+    parseLineupTeamSizesJson(sessionRow.lineupTeamSizesJson),
+    data.teamSize ?? sessionRow.teamSize,
+  );
+  let nextLineupTeamInfos = parseLineupTeamInfoJson(sessionRow.lineupTeamInfoJson);
   if (lineupTeamsUnknown !== undefined) {
     if (!Array.isArray(lineupTeamsUnknown)) {
       return NextResponse.json({ error: "lineupTeams は配列で送ってください" }, { status: 400 });
@@ -227,7 +277,31 @@ export async function PATCH(req: Request, ctx: Ctx) {
       }
     }
     nextLineupTeams = teams;
+    nextLineupTeamSizes = sanitizeLineupTeamSizes(nextLineupTeams, nextLineupTeamSizes, data.teamSize ?? sessionRow.teamSize);
+    nextLineupTeamInfos = sanitizeLineupTeamInfos(nextLineupTeams, nextLineupTeamInfos, memberRows, nextLineupTeamSizes);
     data.lineupTeamsJson = stringifyLineupTeams(teams);
+    data.lineupTeamSizesJson = stringifyLineupTeamSizes(nextLineupTeamSizes);
+    data.lineupTeamInfoJson = stringifyLineupTeamInfos(nextLineupTeamInfos);
+  }
+
+  if (lineupTeamSizesUnknown !== undefined) {
+    if (!Array.isArray(lineupTeamSizesUnknown)) {
+      return NextResponse.json({ error: "lineupTeamSizes は配列で送ってください" }, { status: 400 });
+    }
+    const rawSizes = lineupTeamSizesUnknown.map((v) => Math.floor(Number(v)));
+    nextLineupTeamSizes = sanitizeLineupTeamSizes(nextLineupTeams, rawSizes, data.teamSize ?? sessionRow.teamSize);
+    nextLineupTeamInfos = sanitizeLineupTeamInfos(nextLineupTeams, nextLineupTeamInfos, memberRows, nextLineupTeamSizes);
+    data.lineupTeamSizesJson = stringifyLineupTeamSizes(nextLineupTeamSizes);
+    data.lineupTeamInfoJson = stringifyLineupTeamInfos(nextLineupTeamInfos);
+  }
+
+  if (lineupTeamInfosUnknown !== undefined) {
+    if (!Array.isArray(lineupTeamInfosUnknown)) {
+      return NextResponse.json({ error: "lineupTeamInfos は配列で送ってください" }, { status: 400 });
+    }
+    const rawInfos = lineupTeamInfosUnknown.map((v) => (typeof v === "string" ? v : ""));
+    nextLineupTeamInfos = sanitizeLineupTeamInfos(nextLineupTeams, rawInfos, memberRows, nextLineupTeamSizes);
+    data.lineupTeamInfoJson = stringifyLineupTeamInfos(nextLineupTeamInfos);
   }
 
   if (substitutionsUnknown !== undefined) {
@@ -281,6 +355,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
   if (clearLineupAndMarksOnPlanSave) {
     data.lineupTeamsJson = stringifyLineupTeams([]);
+    data.lineupTeamSizesJson = stringifyLineupTeamSizes([]);
+    data.lineupTeamInfoJson = stringifyLineupTeamInfos([]);
     data.substitutionsJson = stringifySubstitutions([]);
     data.teamSize = 4;
   } else if (lineupTeamsUnknown !== undefined && substitutionsUnknown === undefined) {
@@ -309,8 +385,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     });
 
     return NextResponse.json({ session: updated });
-  } catch {
-    return NextResponse.json({ error: "練習が見つかりません" }, { status: 404 });
+  } catch (e) {
+    console.error("practiceSession.update", e);
+    return NextResponse.json({ error: "練習の保存に失敗しました" }, { status: 503 });
   }
 }
 

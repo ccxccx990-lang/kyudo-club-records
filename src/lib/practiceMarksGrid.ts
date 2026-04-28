@@ -19,8 +19,8 @@ export function slotsFromMarks(marks: string): Shot[] {
 }
 
 export function slotsToMarks(slots: Shot[]): string | null {
-  if (slots.some((s) => s === null)) return null;
-  return slots.join("");
+  if (slots.every((s) => s === null)) return null;
+  return slots.map((s) => s ?? "-").join("");
 }
 
 export function gridsEqual(a: Record<string, Shot[]>, b: Record<string, Shot[]>) {
@@ -60,18 +60,20 @@ export function initialSavedKeys(records: MarksRecord[]): Set<string> {
   return s;
 }
 
-/** 〇の個数と、的中表上の総マス数（立目数×4） */
+/** 〇の個数と、実際に記録した射数（・は中抜けとして分母から除外） */
 export function memberMarksHitsOverTotalSlots(
   memberId: string,
   roundCount: number,
   grid: Record<string, Shot[]>,
 ): { hits: number; totalSlots: number } {
   let hits = 0;
+  let totalSlots = 0;
   for (let r = 1; r <= roundCount; r++) {
     const slots = grid[cellKey(memberId, r)] ?? [null, null, null, null];
     for (const s of slots) {
       if (s === "o") hits++;
+      if (s === "o" || s === "x") totalSlots++;
     }
   }
-  return { hits, totalSlots: Math.max(0, roundCount) * 4 };
+  return { hits, totalSlots };
 }

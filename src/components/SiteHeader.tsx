@@ -18,8 +18,16 @@ export function SiteHeader() {
   }, []);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh, pathname]);
+    let cancelled = false;
+    void fetch("/api/auth/me", { cache: "no-store" })
+      .then((res) => res.json() as Promise<{ admin?: boolean }>)
+      .then((data) => {
+        if (!cancelled) setAdmin(Boolean(data.admin));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -44,7 +52,7 @@ export function SiteHeader() {
               }
               href="/practices"
             >
-              正規練習
+              的中記録
             </Link>
             <Link
               className={
@@ -75,7 +83,7 @@ export function SiteHeader() {
                 }
                 href="/practices/input"
               >
-                練習入力
+                入力
               </Link>
             ) : null}
           </nav>

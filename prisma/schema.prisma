@@ -33,10 +33,16 @@ model PracticeSession {
   roundCount Int      @default(5)
   // 参加対象: all=男女合同, 男=男子のみ, 女=女子のみ
   genderScope     String   @default("all")
-  // attendanceJson: memberId -> present|absent（未記載は参加）
+  // attendanceJson: memberId -> present|absent|late|early|partial（未記載は参加）
   attendanceJson  String   @default("{}")
+  // absentReasonsJson: memberId -> 理由（attendance が absent/late/early/partial の人だけ）
+  absentReasonsJson String @default("{}")
   // lineupTeamsJson: チーム配列。[] のときは出席者を学年順で並べる
   lineupTeamsJson String   @default("[]")
+  // lineupTeamSizesJson: チーム順の人数設定配列
+  lineupTeamSizesJson String @default("[]")
+  // lineupTeamInfoJson: チーム順の情報ラベル配列（未選択は ""）
+  lineupTeamInfoJson String @default("[]")
   // substitutionsJson: [{ roundIndex, outMemberId, inMemberId }]。指定立目以降の交代
   substitutionsJson String @default("[]")
   teamSize        Int      @default(4)

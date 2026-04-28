@@ -34,9 +34,10 @@ export function monthDateRangeIso(year: number, month1to12: number, period: Mont
   return { from, to: `${year}-${pad2(month1to12)}-${pad2(last)}` };
 }
 
-/** 4文字 o/x の記録のみ集計対象 */
-function isValidMarks4(marks: string): boolean {
-  return /^[ox]{4}$/i.test(marks);
+/** 4文字 o/x/- の記録のみ集計対象（- は中抜け） */
+function normalizeMarks4(marks: string): string | null {
+  const normalized = marks.trim().toLowerCase().replace(/[.・]/g, "-");
+  return /^[ox-]{4}$/.test(normalized) ? normalized : null;
 }
 
 function countOInMarks(marks: string): number {
@@ -86,9 +87,9 @@ export function aggregatePersonalHitRates(params: {
     for (const r of s.records) {
       const a = acc.get(r.memberId);
       if (!a) continue;
-      if (!isValidMarks4(r.marks)) continue;
-      const m = r.marks.toLowerCase();
-      a.ta += 4;
+      const m = normalizeMarks4(r.marks);
+      if (!m) continue;
+      a.ta += Array.from(m).filter((c) => c === "o" || c === "x").length;
       a.th += countOInMarks(m);
       const c0 = m[0];
       const c3 = m[3];

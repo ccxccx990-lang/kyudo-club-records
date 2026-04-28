@@ -98,10 +98,10 @@ export function NewPracticeForm() {
       onSubmit={(e) => void submit(e)}
       className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm"
     >
-      <h2 className="text-sm font-semibold text-zinc-900">正規練習を追加</h2>
+      <h2 className="text-sm font-semibold text-zinc-900">的中入力を追加</h2>
       <div className="space-y-3">
         <div className={fieldHalf}>
-          <span className="block">練習日</span>
+          <span className="block">入力日</span>
           <div className="mt-1 flex gap-2">
             <input
               id="new-practice-date"

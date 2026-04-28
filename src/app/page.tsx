@@ -42,7 +42,7 @@ export default async function HomePage() {
         {isAdmin ? (
           <li className="min-h-0">
             <Link className={homeNavTileClass} href="/practices/input">
-              <div className="text-xs font-semibold leading-tight text-indigo-800">練習入力</div>
+              <div className="text-xs font-semibold leading-tight text-indigo-800">入力</div>
               <div className="mt-0.5 text-xs leading-snug text-zinc-600">
                 正規練習の作成・出席・チーム・的中
               </div>

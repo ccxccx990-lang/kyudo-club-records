@@ -77,7 +77,7 @@ export async function PUT(req: Request, ctx: Ctx) {
     const marksNorm = normalizeMarks(typeof r.marks === "string" ? r.marks : "");
     if (!memberId || !Number.isFinite(roundIndex) || marksNorm === null) {
       return NextResponse.json(
-        { error: "各 item に memberId, roundIndex, marks（o/x 4文字）が必要です" },
+        { error: "各 item に memberId, roundIndex, marks（o/x/- 4文字）が必要です" },
         { status: 400 },
       );
     }

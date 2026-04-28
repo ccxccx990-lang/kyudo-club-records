@@ -1,11 +1,31 @@
 import { sortMembers } from "@/lib/memberFields";
 
 export type GenderScope = "all" | "男" | "女";
-export type AttendanceState = "present" | "absent";
+export type AttendanceState = "present" | "absent" | "late" | "early" | "partial";
+export type AbsentReason =
+  | "私用"
+  | "病気"
+  | "授業"
+  | "研究室"
+  | "卒論"
+  | "実験"
+  | "実習"
+  | "演習"
+  | "公欠"
+  | "就活"
+  | "法事"
+  | "その他";
 export type PracticeSubstitution = {
   roundIndex: number;
   outMemberId: string;
   inMemberId: string;
+};
+
+export const LINEUP_TEAM_INFO_OPTIONS_BY_SIZE: Record<number, string[]> = {
+  3: ["女子全関"],
+  4: ["男子リーグ前立", "男子リーグ後立", "女子リーグ", "女子選抜", "女子全日"],
+  5: ["男子選抜", "男子全日"],
+  6: ["男子全関"],
 };
 
 export type MemberForPractice = {
@@ -20,6 +40,20 @@ export const GENDER_SCOPE_OPTIONS: { value: GenderScope; label: string }[] = [
   { value: "男", label: "男子のみ" },
   { value: "女", label: "女子のみ" },
 ];
+export const ABSENT_REASON_OPTIONS: AbsentReason[] = [
+  "私用",
+  "病気",
+  "授業",
+  "研究室",
+  "卒論",
+  "実験",
+  "実習",
+  "演習",
+  "公欠",
+  "就活",
+  "法事",
+  "その他",
+];
 
 export function isGenderScope(s: string): s is GenderScope {
   return s === "all" || s === "男" || s === "女";
@@ -31,18 +65,54 @@ export function membersInGenderScope(members: MemberForPractice[], scope: Gender
   return members;
 }
 
+export function isAttendanceState(v: unknown): v is AttendanceState {
+  return v === "present" || v === "absent" || v === "late" || v === "early" || v === "partial";
+}
+
+export function isAbsentReason(v: unknown): v is AbsentReason {
+  return typeof v === "string" && ABSENT_REASON_OPTIONS.includes(v as AbsentReason);
+}
+
 export function parseAttendanceJson(raw: string): Record<string, AttendanceState> {
   try {
     const o = JSON.parse(raw) as unknown;
     if (typeof o !== "object" || o === null) return {};
     const out: Record<string, AttendanceState> = {};
     for (const [k, v] of Object.entries(o)) {
-      if (v === "present" || v === "absent") out[k] = v;
+      if (isAttendanceState(v)) out[k] = v;
     }
     return out;
   } catch {
     return {};
   }
+}
+
+export function parseAbsentReasonsJson(raw: string): Record<string, AbsentReason> {
+  try {
+    const o = JSON.parse(raw) as unknown;
+    if (typeof o !== "object" || o === null) return {};
+    const out: Record<string, AbsentReason> = {};
+    for (const [k, v] of Object.entries(o)) {
+      if (isAbsentReason(v)) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+export function sanitizeAbsentReasons(
+  reasons: Record<string, AbsentReason>,
+  attendance: Record<string, AttendanceState>,
+  memberIds: Set<string>,
+): Record<string, AbsentReason> {
+  const out: Record<string, AbsentReason> = {};
+  for (const [memberId, reason] of Object.entries(reasons)) {
+    if (memberIds.has(memberId) && attendance[memberId] !== undefined && attendance[memberId] !== "present") {
+      out[memberId] = reason;
+    }
+  }
+  return out;
 }
 
 export function parseLineupTeamsJson(raw: string): string[][] {
@@ -60,6 +130,78 @@ export function parseLineupTeamsJson(raw: string): string[][] {
   } catch {
     return [];
   }
+}
+
+export function lineupTeamInfoOptionsForSize(teamSize: number): string[] {
+  return LINEUP_TEAM_INFO_OPTIONS_BY_SIZE[teamSize] ?? [];
+}
+
+export function lineupTeamInfoOptionsForTeam(
+  team: readonly string[],
+  members?: readonly MemberForPractice[],
+  teamSize = team.length,
+): string[] {
+  const options = lineupTeamInfoOptionsForSize(teamSize);
+  if (!members) return options;
+  const memberById = new Map(members.map((m) => [m.id, m]));
+  const allFemale = team.length > 0 && team.every((id) => memberById.get(id)?.gender === "女");
+  return options.filter((option) => option.startsWith(allFemale ? "女子" : "男子"));
+}
+
+export function parseLineupTeamInfoJson(raw: string): string[] {
+  try {
+    const o = JSON.parse(raw) as unknown;
+    if (!Array.isArray(o)) return [];
+    return o.map((v) => (typeof v === "string" ? v : ""));
+  } catch {
+    return [];
+  }
+}
+
+export function parseLineupTeamSizesJson(raw: string): number[] {
+  try {
+    const o = JSON.parse(raw) as unknown;
+    if (!Array.isArray(o)) return [];
+    return o.map((v) => Math.floor(Number(v))).filter((v) => Number.isFinite(v));
+  } catch {
+    return [];
+  }
+}
+
+export function sanitizeLineupTeamSizes(
+  teams: string[][],
+  sizes: readonly number[],
+  fallbackSize: number,
+): number[] {
+  const fallback = Math.min(6, Math.max(1, Math.floor(fallbackSize) || 4));
+  let teamIndex = 0;
+  const out: number[] = [];
+  for (const team of teams) {
+    if (team.length === 0) continue;
+    const rawSize = Math.floor(Number(sizes[teamIndex]));
+    const selected = Number.isFinite(rawSize) ? rawSize : fallback;
+    out.push(Math.min(6, Math.max(1, team.length, selected)));
+    teamIndex += 1;
+  }
+  return out;
+}
+
+export function sanitizeLineupTeamInfos(
+  teams: string[][],
+  infos: readonly string[],
+  members?: readonly MemberForPractice[],
+  sizes: readonly number[] = [],
+): string[] {
+  let teamIndex = 0;
+  const out: string[] = [];
+  for (const team of teams) {
+    if (team.length === 0) continue;
+    const selected = infos[teamIndex] ?? "";
+    const options = lineupTeamInfoOptionsForTeam(team, members, sizes[teamIndex] ?? team.length);
+    out.push(options.includes(selected) ? selected : "");
+    teamIndex += 1;
+  }
+  return out;
 }
 
 export function parseSubstitutionsJson(raw: string): PracticeSubstitution[] {
@@ -290,6 +432,10 @@ export function stringifyAttendance(att: Record<string, AttendanceState>): strin
   return JSON.stringify(att);
 }
 
+export function stringifyAbsentReasons(reasons: Record<string, AbsentReason>): string {
+  return JSON.stringify(reasons);
+}
+
 export function stableAttendanceJson(att: Record<string, AttendanceState>): string {
   const keys = Object.keys(att).sort();
   const o: Record<string, AttendanceState> = {};
@@ -297,8 +443,23 @@ export function stableAttendanceJson(att: Record<string, AttendanceState>): stri
   return JSON.stringify(o);
 }
 
+export function stableAbsentReasonsJson(reasons: Record<string, AbsentReason>): string {
+  const keys = Object.keys(reasons).sort();
+  const o: Record<string, AbsentReason> = {};
+  for (const k of keys) o[k] = reasons[k];
+  return JSON.stringify(o);
+}
+
 export function stringifyLineupTeams(teams: string[][]): string {
   return JSON.stringify(teams);
+}
+
+export function stringifyLineupTeamInfos(infos: readonly string[]): string {
+  return JSON.stringify(infos.map((info) => info.trim()));
+}
+
+export function stringifyLineupTeamSizes(sizes: readonly number[]): string {
+  return JSON.stringify(sizes.map((size) => Math.min(6, Math.max(1, Math.floor(size) || 4))));
 }
 
 export function stringifySubstitutions(substitutions: readonly PracticeSubstitution[]): string {

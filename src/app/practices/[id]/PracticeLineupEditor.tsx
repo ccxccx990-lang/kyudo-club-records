@@ -5,7 +5,11 @@ import {
   isGenderScope,
   membersInGenderScope,
   parseAttendanceJson,
+  parseLineupTeamInfoJson,
+  parseLineupTeamSizesJson,
   parseLineupTeamsJson,
+  sanitizeLineupTeamInfos,
+  sanitizeLineupTeamSizes,
   trimLineupSentinels,
   type MemberForPractice,
 } from "@/lib/practiceSessionPlan";
@@ -43,6 +47,25 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
     const lt = parseLineupTeamsJson(session.lineupTeamsJson);
     return lt.length === 0 ? [[]] : lt;
   });
+  const [lineupTeamInfos, setLineupTeamInfos] = useState<string[]>(() =>
+    sanitizeLineupTeamInfos(
+      parseLineupTeamsJson(session.lineupTeamsJson),
+      parseLineupTeamInfoJson(session.lineupTeamInfoJson),
+      members,
+      sanitizeLineupTeamSizes(
+        parseLineupTeamsJson(session.lineupTeamsJson),
+        parseLineupTeamSizesJson(session.lineupTeamSizesJson),
+        session.teamSize,
+      ),
+    ),
+  );
+  const [lineupTeamSizes, setLineupTeamSizes] = useState<number[]>(() =>
+    sanitizeLineupTeamSizes(
+      parseLineupTeamsJson(session.lineupTeamsJson),
+      parseLineupTeamSizesJson(session.lineupTeamSizesJson),
+      session.teamSize,
+    ),
+  );
   const [teamSize, setTeamSize] = useState(session.teamSize);
 
   const [planMsg, setPlanMsg] = useState<string | null>(null);
@@ -52,28 +75,44 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
     () =>
       JSON.stringify({
         lineup: trimLineupSentinels(parseLineupTeamsJson(session.lineupTeamsJson)),
+        teamSizes: sanitizeLineupTeamSizes(
+          trimLineupSentinels(parseLineupTeamsJson(session.lineupTeamsJson)),
+          parseLineupTeamSizesJson(session.lineupTeamSizesJson),
+          session.teamSize,
+        ),
+        teamInfos: sanitizeLineupTeamInfos(
+          trimLineupSentinels(parseLineupTeamsJson(session.lineupTeamsJson)),
+          parseLineupTeamInfoJson(session.lineupTeamInfoJson),
+          members,
+          sanitizeLineupTeamSizes(
+            trimLineupSentinels(parseLineupTeamsJson(session.lineupTeamsJson)),
+            parseLineupTeamSizesJson(session.lineupTeamSizesJson),
+            session.teamSize,
+          ),
+        ),
         teamSize: session.teamSize,
       }),
-    [session.lineupTeamsJson, session.teamSize],
+    [members, session.lineupTeamInfoJson, session.lineupTeamSizesJson, session.lineupTeamsJson, session.teamSize],
   );
 
   const localLineupFingerprint = useMemo(
     () =>
       JSON.stringify({
         lineup: trimLineupSentinels(lineupTeams),
+        teamSizes: sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
+        teamInfos: sanitizeLineupTeamInfos(
+          trimLineupSentinels(lineupTeams),
+          lineupTeamInfos,
+          members,
+          sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
+        ),
         teamSize,
       }),
-    [lineupTeams, teamSize],
+    [lineupTeamInfos, lineupTeamSizes, lineupTeams, members, teamSize],
   );
 
   const lineupDirty = localLineupFingerprint !== serverLineupFingerprint;
   const hasUnsavedChanges = isAdmin && lineupDirty;
-
-  useEffect(() => {
-    const lt = parseLineupTeamsJson(session.lineupTeamsJson);
-    setLineupTeams(lt.length === 0 ? [[]] : lt);
-    setTeamSize(session.teamSize);
-  }, [session.id, session.lineupTeamsJson, session.teamSize]);
 
   useEffect(() => {
     if (!hasUnsavedChanges) return;
@@ -101,6 +140,13 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         lineupTeams: trimLineupSentinels(lineupTeams),
+        lineupTeamSizes: sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
+        lineupTeamInfos: sanitizeLineupTeamInfos(
+          trimLineupSentinels(lineupTeams),
+          lineupTeamInfos,
+          members,
+          sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
+        ),
         teamSize,
       }),
     });
@@ -116,10 +162,18 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
   const clearLineup = () => {
     if (!isAdmin) return;
     setLineupTeams([[]]);
+    setLineupTeamInfos([]);
+    setLineupTeamSizes([]);
   };
 
   const memberMap = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
   const normalizedSaved = parseLineupTeamsJson(session.lineupTeamsJson).filter((t) => t.length > 0);
+  const normalizedSavedTeamInfos = sanitizeLineupTeamInfos(
+    normalizedSaved,
+    parseLineupTeamInfoJson(session.lineupTeamInfoJson),
+    members,
+    sanitizeLineupTeamSizes(normalizedSaved, parseLineupTeamSizesJson(session.lineupTeamSizesJson), session.teamSize),
+  );
 
   return (
     <div className="space-y-8">
@@ -172,6 +226,10 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
             maxMato={session.maxMato}
             lineupTeams={lineupTeams}
             setLineupTeams={setLineupTeams}
+            lineupTeamSizes={lineupTeamSizes}
+            setLineupTeamSizes={setLineupTeamSizes}
+            lineupTeamInfos={lineupTeamInfos}
+            setLineupTeamInfos={setLineupTeamInfos}
             onTeamSizeChange={setTeamSize}
           />
           <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
@@ -213,7 +271,10 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
             <div className="space-y-3">
               {normalizedSaved.map((ids, ti) => (
                 <div key={ti} className="rounded-md border border-zinc-200 bg-white p-3">
-                  <p className="mb-2 text-xs font-semibold text-zinc-600">チーム {ti + 1}</p>
+                  <p className="mb-2 text-xs font-semibold text-zinc-600">
+                    チーム {ti + 1}
+                    {normalizedSavedTeamInfos[ti] ? `（${normalizedSavedTeamInfos[ti]}）` : ""}
+                  </p>
                   <ul className="space-y-1">
                     {ids.map((mid) => {
                       const m = memberMap.get(mid);

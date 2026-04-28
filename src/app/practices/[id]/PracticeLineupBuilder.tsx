@@ -2,13 +2,13 @@
 
 import { computeRoundPacking } from "@/lib/practiceRoundPacking";
 import { uiBtnSmDanger, uiBtnSmMuted, uiBtnSmSecondary, uiPill, uiPillSm } from "@/lib/uiButtons";
-import { roundNumberAfterMarker } from "@/lib/practiceSessionPlan";
+import { lineupTeamInfoOptionsForTeam, roundNumberAfterMarker, sanitizeLineupTeamSizes } from "@/lib/practiceSessionPlan";
 import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 export type LineMember = { id: string; name: string; gender: string; gradeYear: string };
 
-/** 末尾から見て最後の [] より後ろのチームにいる人数合計（現在の立ちの累計） */
-function memberCountInTailSegment(teams: string[][]): number {
+/** 末尾から見て最後の [] より後ろのチーム人数設定合計（現在の立ちの予定人数） */
+function targetCountInTailSegment(teams: string[][], teamSizes: readonly number[], fallbackSize: number): number {
   let start = 0;
   for (let i = teams.length - 1; i >= 0; i--) {
     if (teams[i]!.length === 0) {
@@ -17,8 +17,12 @@ function memberCountInTailSegment(teams: string[][]): number {
     }
   }
   let n = 0;
+  let teamInfoIndex = teams.slice(0, start).filter((team) => team.length > 0).length;
   for (let i = start; i < teams.length; i++) {
-    n += teams[i]!.length;
+    const team = teams[i]!;
+    if (team.length === 0) continue;
+    n += teamSizes[teamInfoIndex] ?? Math.min(6, Math.max(1, fallbackSize));
+    teamInfoIndex += 1;
   }
   return n;
 }
@@ -29,6 +33,10 @@ type Props = {
   maxMato: number;
   lineupTeams: string[][];
   setLineupTeams: Dispatch<SetStateAction<string[][]>>;
+  lineupTeamSizes: number[];
+  setLineupTeamSizes: Dispatch<SetStateAction<number[]>>;
+  lineupTeamInfos: string[];
+  setLineupTeamInfos: Dispatch<SetStateAction<string[]>>;
   onTeamSizeChange: (n: number) => void;
 };
 
@@ -38,9 +46,14 @@ export function PracticeLineupBuilder({
   maxMato,
   lineupTeams,
   setLineupTeams,
+  lineupTeamSizes,
+  setLineupTeamSizes,
+  lineupTeamInfos,
+  setLineupTeamInfos,
   onTeamSizeChange,
 }: Props) {
   const [candidateGender, setCandidateGender] = useState<"all" | "男" | "女">("all");
+  const [selectedTeamIndex, setSelectedTeamIndex] = useState<number | null>(null);
 
   const memberMap = useMemo(
     () => new Map(participatingMembers.map((m) => [m.id, m])),
@@ -48,6 +61,17 @@ export function PracticeLineupBuilder({
   );
 
   const flatIds = useMemo(() => lineupTeams.flat(), [lineupTeams]);
+  const normalizedTeamSizes = useMemo(
+    () => sanitizeLineupTeamSizes(lineupTeams, lineupTeamSizes, teamSize),
+    [lineupTeamSizes, lineupTeams, teamSize],
+  );
+  const nonEmptyTeamCount = normalizedTeamSizes.length;
+  const activeSelectedTeamIndex =
+    selectedTeamIndex !== null && selectedTeamIndex >= 0 && selectedTeamIndex < nonEmptyTeamCount
+      ? selectedTeamIndex
+      : null;
+  const selectedTeamSize =
+    activeSelectedTeamIndex === null ? teamSize : normalizedTeamSizes[activeSelectedTeamIndex] ?? teamSize;
 
   const candidates = useMemo(() => {
     let ms = participatingMembers.filter((m) => !flatIds.includes(m.id));
@@ -58,40 +82,109 @@ export function PracticeLineupBuilder({
 
   const unassignedCount = participatingMembers.length - flatIds.length;
 
+  const teamInfoIndexForLineupIndex = (teams: string[][], lineupIndex: number): number =>
+    teams.slice(0, lineupIndex + 1).filter((team) => team.length > 0).length - 1;
+
+  const lineupIndexForTeamInfoIndex = (teams: string[][], teamInfoIndex: number): number =>
+    teams.findIndex((team, lineupIndex) => team.length > 0 && teamInfoIndexForLineupIndex(teams, lineupIndex) === teamInfoIndex);
+
   /** 末尾が立ち区切り [] のときは重ねない（次の立ちへは未入力のまま待つ） */
   const canAppendNextRound =
     lineupTeams.length === 0 || lineupTeams[lineupTeams.length - 1]!.length > 0;
 
   const addToLineup = (memberId: string) => {
-    setLineupTeams((prev) => {
-      const copy = prev.map((t) => [...t]);
-      const tailCount = memberCountInTailSegment(copy);
-      const lastTeam = copy.length > 0 ? copy[copy.length - 1] : null;
-      if (tailCount >= maxMato && lastTeam && lastTeam.length > 0) {
-        copy.push([]);
+    const copy = lineupTeams.map((t) => [...t]);
+    const sizes = sanitizeLineupTeamSizes(copy, lineupTeamSizes, teamSize);
+    const selectedLineupIndex =
+      activeSelectedTeamIndex === null ? -1 : lineupIndexForTeamInfoIndex(copy, activeSelectedTeamIndex);
+
+    if (activeSelectedTeamIndex !== null && selectedLineupIndex >= 0) {
+      const selectedTeam = copy[selectedLineupIndex]!;
+      const selectedSize = sizes[activeSelectedTeamIndex] ?? teamSize;
+      if (selectedTeam.length < selectedSize) {
+        copy[selectedLineupIndex] = [...selectedTeam, memberId];
+        setLineupTeams(copy);
+        if (copy[selectedLineupIndex]!.length >= selectedSize) setSelectedTeamIndex(null);
+        return;
       }
-      if (copy.length === 0) return [[memberId]];
-      const li = copy.length - 1;
-      // 末尾が立ち区切りの空チームなら、そこに詰めず「その次」の新チームに入れる
-      if (copy[li]!.length === 0) {
-        copy.push([memberId]);
-        return copy;
-      }
-      if (copy[li]!.length >= teamSize) {
-        copy.push([memberId]);
-        return copy;
-      }
-      copy[li]!.push(memberId);
-      return copy;
+      setSelectedTeamIndex(null);
+    }
+
+    const normalized = copy.length === 0 ? [[]] : copy;
+    const tailCount = targetCountInTailSegment(normalized, sizes, teamSize);
+    const lastTeam = normalized.length > 0 ? normalized[normalized.length - 1] : null;
+    const shouldStartNextRound = tailCount + teamSize > maxMato && lastTeam && lastTeam.length > 0;
+    const next =
+      normalized.length === 0
+        ? [[memberId]]
+        : normalized[normalized.length - 1]!.length === 0
+          ? [...normalized, [memberId]]
+          : shouldStartNextRound
+            ? [...normalized, [], [memberId]]
+            : [...normalized, [memberId]];
+    const nextTeamIndex = next.filter((team) => team.length > 0).length - 1;
+    setLineupTeams(next);
+    setLineupTeamSizes((prev) => {
+      const out = sanitizeLineupTeamSizes(next, prev, teamSize);
+      out[nextTeamIndex] = teamSize;
+      return out;
     });
+    setSelectedTeamIndex(teamSize <= 1 ? null : nextTeamIndex);
   };
 
   const removeFromLineup = (memberId: string) => {
+    const teamIndex = lineupTeams.findIndex((team) => team.includes(memberId));
+    const teamInfoIndex =
+      teamIndex >= 0 ? lineupTeams.slice(0, teamIndex + 1).filter((team) => team.length > 0).length - 1 : -1;
+    const removesTeam = teamIndex >= 0 && lineupTeams[teamIndex]!.length === 1;
     setLineupTeams((prev) => {
       const next = prev.map((t) => t.filter((id) => id !== memberId));
       while (next.length > 1 && next[next.length - 1]!.length === 0) next.pop();
       return next.length === 0 ? [[]] : next;
     });
+    if (removesTeam && teamInfoIndex >= 0) {
+      setLineupTeamInfos((prev) => prev.filter((_, idx) => idx !== teamInfoIndex));
+      setLineupTeamSizes((prev) => prev.filter((_, idx) => idx !== teamInfoIndex));
+      if (activeSelectedTeamIndex === teamInfoIndex) {
+        setSelectedTeamIndex(null);
+      } else if (activeSelectedTeamIndex !== null && activeSelectedTeamIndex > teamInfoIndex) {
+        setSelectedTeamIndex(activeSelectedTeamIndex - 1);
+      }
+    }
+  };
+
+  const setTeamInfo = (teamInfoIndex: number, value: string) => {
+    setLineupTeamInfos((prev) => {
+      const next = [...prev];
+      next[teamInfoIndex] = value;
+      return next;
+    });
+  };
+
+  const changeTeamSize = (size: number) => {
+    if (activeSelectedTeamIndex === null) {
+      onTeamSizeChange(size);
+      return;
+    }
+    setLineupTeamSizes((prev) => {
+      const next = sanitizeLineupTeamSizes(lineupTeams, prev, teamSize);
+      const lineupIndex = lineupIndexForTeamInfoIndex(lineupTeams, activeSelectedTeamIndex);
+      const memberCount = lineupIndex >= 0 ? lineupTeams[lineupIndex]!.length : 1;
+      next[activeSelectedTeamIndex] = Math.min(6, Math.max(memberCount, size));
+      return next;
+    });
+    const lineupIndex = lineupIndexForTeamInfoIndex(lineupTeams, activeSelectedTeamIndex);
+    const memberCount = lineupIndex >= 0 ? lineupTeams[lineupIndex]!.length : 1;
+    const nextSize = Math.min(6, Math.max(memberCount, size));
+    if (lineupIndex >= 0) {
+      const options = lineupTeamInfoOptionsForTeam(lineupTeams[lineupIndex]!, participatingMembers, nextSize);
+      setLineupTeamInfos((prev) => {
+        const next = [...prev];
+        if (!options.includes(next[activeSelectedTeamIndex] ?? "")) next[activeSelectedTeamIndex] = "";
+        return next;
+      });
+    }
+    if (memberCount >= nextSize) setSelectedTeamIndex(null);
   };
 
   /** 「次の立ちへ」— 最大的人数に達していなくても、ここから次の立ちのチーム編成に進む */
@@ -124,14 +217,31 @@ export function PracticeLineupBuilder({
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50/80 p-3">
-          <p className="text-xs font-semibold text-zinc-700">チーム人数（次に追加するチームへの詰め込み人数）</p>
+          <p className="text-xs font-semibold text-zinc-700">
+            チーム人数
+            {activeSelectedTeamIndex === null ? "（次に作るチーム）" : `（選択中: チーム ${activeSelectedTeamIndex + 1}）`}
+          </p>
           <div className="flex flex-wrap gap-1">
             {[1, 2, 3, 4, 5, 6].map((sz) => (
-              <button key={sz} type="button" onClick={() => onTeamSizeChange(sz)} className={uiPill(teamSize === sz)}>
+              <button
+                key={sz}
+                type="button"
+                onClick={() => changeTeamSize(sz)}
+                className={uiPill(selectedTeamSize === sz)}
+              >
                 {sz}人
               </button>
             ))}
           </div>
+          {activeSelectedTeamIndex !== null ? (
+            <button
+              type="button"
+              className={`${uiBtnSmMuted} w-full justify-center`}
+              onClick={() => setSelectedTeamIndex(null)}
+            >
+              チーム選択を解除
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={!canAppendNextRound}
@@ -209,9 +319,7 @@ export function PracticeLineupBuilder({
       <div className="rounded-lg border border-zinc-200 bg-white p-3">
         <p className="mb-2 text-xs font-semibold text-zinc-700">部員プレビュー</p>
         <div className="flex flex-col gap-3">
-          {(() => {
-            let teamOrdinal = 0;
-            return lineupTeams.map((team, ti) => {
+          {lineupTeams.map((team, ti) => {
               if (team.length === 0) {
                 const rn = roundNumberAfterMarker(lineupTeams, ti);
                 return (
@@ -223,14 +331,48 @@ export function PracticeLineupBuilder({
                   </div>
                 );
               }
-              teamOrdinal += 1;
+              const teamOrdinal = lineupTeams.slice(0, ti + 1).filter((row) => row.length > 0).length;
+              const teamInfoIndex = teamOrdinal - 1;
+              const targetTeamSize = normalizedTeamSizes[teamInfoIndex] ?? teamSize;
+              const teamInfoOptions = lineupTeamInfoOptionsForTeam(team, participatingMembers, targetTeamSize);
+              const selectedTeamInfo = teamInfoOptions.includes(lineupTeamInfos[teamInfoIndex] ?? "")
+                ? lineupTeamInfos[teamInfoIndex]!
+                : "";
+              const selected = activeSelectedTeamIndex === teamInfoIndex;
               return (
-                <div key={`team-${ti}`} className="rounded-md border border-zinc-200 bg-zinc-50">
-                  <div className="flex justify-between border-b border-zinc-200 bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-800">
-                    <span>チーム {teamOrdinal}</span>
-                    <span>
-                      {team.length}/{teamSize}人
-                    </span>
+                <div
+                  key={`team-${ti}`}
+                  className={`rounded-md border bg-zinc-50 ${selected ? "border-indigo-400 ring-2 ring-indigo-100" : "border-zinc-200"}`}
+                >
+                  <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-100 px-2 py-1.5 text-xs font-semibold text-zinc-800 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center justify-between gap-2 sm:justify-start">
+                      <span>チーム {teamOrdinal}</span>
+                      <span>
+                        {team.length}/{targetTeamSize}人
+                      </span>
+                      <button
+                        type="button"
+                        className={selected ? uiPillSm(true) : uiPillSm(false)}
+                        onClick={() => setSelectedTeamIndex(selected ? null : teamInfoIndex)}
+                      >
+                        {selected ? "選択中" : "選択"}
+                      </button>
+                    </div>
+                    <label className="flex items-center gap-2 font-normal text-zinc-700">
+                      <span className="shrink-0 text-xs font-semibold">チーム情報</span>
+                      <select
+                        className="min-w-0 rounded border border-zinc-300 bg-white px-2 py-1 text-xs text-zinc-900"
+                        value={selectedTeamInfo}
+                        onChange={(e) => setTeamInfo(teamInfoIndex, e.target.value)}
+                      >
+                        <option value="">-</option>
+                        {teamInfoOptions.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                   <div className="divide-y divide-zinc-100">
                     {team.map((mid) => {
@@ -254,8 +396,7 @@ export function PracticeLineupBuilder({
                   </div>
                 </div>
               );
-            });
-          })()}
+            })}
         </div>
       </div>
     </div>
