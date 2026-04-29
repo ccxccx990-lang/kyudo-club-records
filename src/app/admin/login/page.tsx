@@ -1,33 +1,32 @@
 "use client";
 
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
 import { uiBtnPrimary } from "@/lib/uiButtons";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 /** 管理者ログインページ */
 export default function AdminLoginPage() {
-  const router = useRouter();
+  const { replace, refresh, runBlocking, isBusy } = useGlobalBusy();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true);
     setError(null);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+    await runBlocking(async () => {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "ログインに失敗しました");
+        return;
+      }
+      replace("/");
+      refresh();
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? "ログインに失敗しました");
-      return;
-    }
-    router.replace("/");
-    router.refresh();
   };
 
   return (
@@ -50,10 +49,10 @@ export default function AdminLoginPage() {
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
         <button
           type="submit"
-          disabled={busy || !password}
+          disabled={isBusy || !password}
           className={`${uiBtnPrimary} w-full justify-center`}
         >
-          {busy ? "確認中…" : "ログイン"}
+          {isBusy ? "確認中…" : "ログイン"}
         </button>
       </form>
     </main>

@@ -3,7 +3,7 @@ import { publicDatabaseErrorMessage } from "@/lib/dbPageError";
 import { sortMembers } from "@/lib/memberFields";
 import { prisma } from "@/lib/prisma";
 import { readIsAdmin } from "@/lib/serverAdmin";
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 import { notFound } from "next/navigation";
 import { PracticeDetail } from "./PracticeDetail";
 
@@ -53,9 +53,9 @@ export default async function PracticePage({ params }: PageProps) {
       {members.length === 0 ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
           部員がまだいません。先に{" "}
-          <Link className="font-semibold text-indigo-900 underline" href="/members">
+          <AppLink className="font-semibold text-indigo-900 underline" href="/members">
             部員
-          </Link>{" "}
+          </AppLink>{" "}
           を登録してください。
         </div>
       ) : null}

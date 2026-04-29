@@ -14,8 +14,8 @@ import {
   type MemberForPractice,
 } from "@/lib/practiceSessionPlan";
 import { uiBtnAccent, uiBtnDangerOutline, uiBtnPrimary } from "@/lib/uiButtons";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import AppLink from "@/components/AppLink";
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
 import { useEffect, useMemo, useState } from "react";
 import type { SessionLite } from "./PracticeDetail";
 import { PracticeLineupBuilder } from "./PracticeLineupBuilder";
@@ -28,7 +28,7 @@ type Props = {
 
 /** チーム編成のみ（/practices/[id]/lineup） */
 export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
-  const router = useRouter();
+  const { refresh, runBlocking, isBusy } = useGlobalBusy();
 
   const sessionGenderScope = isGenderScope(session.genderScope) ? session.genderScope : "all";
   const attendance = useMemo(() => parseAttendanceJson(session.attendanceJson), [session.attendanceJson]);
@@ -69,7 +69,6 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
   const [teamSize, setTeamSize] = useState(session.teamSize);
 
   const [planMsg, setPlanMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   const serverLineupFingerprint = useMemo(
     () =>
@@ -133,30 +132,30 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
 
   const saveLineup = async () => {
     if (!isAdmin) return;
-    setBusy(true);
     setPlanMsg(null);
-    const res = await fetch(`/api/practices/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        lineupTeams: trimLineupSentinels(lineupTeams),
-        lineupTeamSizes: sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
-        lineupTeamInfos: sanitizeLineupTeamInfos(
-          trimLineupSentinels(lineupTeams),
-          lineupTeamInfos,
-          members,
-          sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
-        ),
-        teamSize,
-      }),
+    await runBlocking(async () => {
+      const res = await fetch(`/api/practices/${session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lineupTeams: trimLineupSentinels(lineupTeams),
+          lineupTeamSizes: sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
+          lineupTeamInfos: sanitizeLineupTeamInfos(
+            trimLineupSentinels(lineupTeams),
+            lineupTeamInfos,
+            members,
+            sanitizeLineupTeamSizes(trimLineupSentinels(lineupTeams), lineupTeamSizes, teamSize),
+          ),
+          teamSize,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setPlanMsg(data.error ?? "保存に失敗しました");
+        return;
+      }
+      refresh();
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setPlanMsg(data.error ?? "保存に失敗しました");
-      return;
-    }
-    router.refresh();
   };
 
   const clearLineup = () => {
@@ -180,24 +179,24 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm text-zinc-500">
-            <Link className="text-indigo-800 hover:underline" href={`/practices/${session.id}`}>
+            <AppLink className="text-indigo-800 hover:underline" href={`/practices/${session.id}`}>
               ← 参加区分・出席へ
-            </Link>
+            </AppLink>
             {" · "}
-            <Link className="text-indigo-800 hover:underline" href="/practices">
+            <AppLink className="text-indigo-800 hover:underline" href="/practices">
               一覧へ
-            </Link>
+            </AppLink>
           </p>
           <h1 className="mt-2 text-2xl font-bold">{formatPracticeDate(session.practiceDate)}</h1>
           <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">メモ: {session.memo || "—"}</p>
         </div>
         {!isAdmin ? (
-          <Link
+          <AppLink
             href={`/practices/${session.id}/marks`}
             className="rounded-md bg-emerald-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-800"
           >
             的中入力へ →
-          </Link>
+          </AppLink>
         ) : null}
       </div>
 
@@ -215,9 +214,9 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
           <h2 className="text-sm font-semibold text-zinc-900">チーム編成（1チーム1〜6人）</h2>
           <p className="text-xs text-zinc-500">
             候補からタップで現在のチームに追加します。人数が上限に達すると次のチームに回ります。現在の立ちの人数が最大的数に達すると次の立ちの区切りが自動で入ります。それより早く立ちを分ける場合は「次の立ちへ」を使ってください。保存すると
-            <Link className="font-medium text-indigo-800 underline" href={`/practices/${session.id}/marks`}>
+            <AppLink className="font-medium text-indigo-800 underline" href={`/practices/${session.id}/marks`}>
               的中入力
-            </Link>
+            </AppLink>
             ページでの行順がこのチーム順になります。チームを保存しない場合は、出席者を学年・男女・名前順で表示します。
           </p>
           <PracticeLineupBuilder
@@ -235,7 +234,7 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
           <div className="flex flex-col gap-3 border-t border-zinc-100 pt-4 sm:flex-row sm:flex-wrap sm:items-center">
             <button
               type="button"
-              disabled={busy}
+              disabled={isBusy}
               className={`${uiBtnDangerOutline} w-full justify-center sm:w-auto`}
               onClick={clearLineup}
             >
@@ -243,13 +242,13 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={isBusy}
               className={`${uiBtnPrimary} w-full justify-center sm:w-auto`}
               onClick={() => void saveLineup()}
             >
               チーム編成を保存
             </button>
-            <Link
+            <AppLink
               href={`/practices/${session.id}/marks`}
               className={`${uiBtnAccent} w-full justify-center sm:ml-auto sm:w-auto`}
               onClick={(e) => {
@@ -258,7 +257,7 @@ export function PracticeLineupEditor({ session, members, isAdmin }: Props) {
               }}
             >
               的中入力へ →
-            </Link>
+            </AppLink>
           </div>
           {planMsg ? <p className="text-sm text-red-700">{planMsg}</p> : null}
         </section>

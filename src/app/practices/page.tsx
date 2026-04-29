@@ -4,7 +4,7 @@ import { formatPracticeDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { readIsAdmin } from "@/lib/serverAdmin";
 import { uiLinkChip, uiLinkChipAccent } from "@/lib/uiButtons";
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,9 +85,9 @@ export default async function PracticesPage({ searchParams }: { searchParams?: P
               日付から的中（〇×）を開けます。出欠・チーム・的中の
               <strong className="text-zinc-800">修正</strong>
               は「管理」列からのみ行えます（管理者のみ）。新規作成は上部ナビの
-              <Link className="font-medium text-indigo-800 underline" href="/practices/input">
+              <AppLink className="font-medium text-indigo-800 underline" href="/practices/input">
                 入力
-              </Link>
+              </AppLink>
               です。
             </>
           ) : (
@@ -151,9 +151,9 @@ export default async function PracticesPage({ searchParams }: { searchParams?: P
             >
               検索
             </button>
-            <Link className={uiLinkChip} href="/practices">
+            <AppLink className={uiLinkChip} href="/practices">
               解除
-            </Link>
+            </AppLink>
           </div>
         </div>
       </form>
@@ -172,29 +172,29 @@ export default async function PracticesPage({ searchParams }: { searchParams?: P
             {practices.map((p) => (
               <tr key={p.id} className="border-t border-zinc-100">
                 <td className="px-4 py-3">
-                  <Link className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
+                  <AppLink className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
                     {formatPracticeDate(p.practiceDate)}
-                  </Link>
+                  </AppLink>
                 </td>
                 <td className="px-4 py-3 text-zinc-700">{kindLabel(p.sessionKind)}</td>
                 <td className="whitespace-pre-wrap px-4 py-3 text-zinc-700">{p.memo || "—"}</td>
                 <td className="px-4 py-3">
                   {isAdmin ? (
                     <div className="flex flex-wrap items-center gap-2">
-                      <Link className={uiLinkChip} href={`/practices/${p.id}`}>
+                      <AppLink className={uiLinkChip} href={`/practices/${p.id}`}>
                         出欠
-                      </Link>
-                      <Link className={uiLinkChip} href={`/practices/${p.id}/lineup`}>
+                      </AppLink>
+                      <AppLink className={uiLinkChip} href={`/practices/${p.id}/lineup`}>
                         チーム
-                      </Link>
-                      <Link className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
+                      </AppLink>
+                      <AppLink className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
                         的中
-                      </Link>
+                      </AppLink>
                     </div>
                   ) : (
-                    <Link className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
+                    <AppLink className={uiLinkChipAccent} href={`/practices/${p.id}/marks`}>
                       閲覧
-                    </Link>
+                    </AppLink>
                   )}
                 </td>
               </tr>

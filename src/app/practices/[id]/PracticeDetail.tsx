@@ -24,9 +24,9 @@ import {
   uiLinkChip,
   uiToggleChoice,
 } from "@/lib/uiButtons";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import AppLink from "@/components/AppLink";
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 
 export type MemberLite = MemberForPractice;
 export type SessionLite = {
@@ -77,7 +77,7 @@ function attendanceChoiceClass(state: AttendanceState, selected: boolean): strin
 
 /** 正規練習の詳細・参加区分・出席（チーム編成は /lineup） */
 export function PracticeDetail({ session, members, isAdmin }: Props) {
-  const router = useRouter();
+  const { push, replace, runBlocking, beginBlocking, endBlocking, isBusy } = useGlobalBusy();
 
   const sessionGenderScope: GenderScope = isGenderScope(session.genderScope) ? session.genderScope : "all";
 
@@ -90,7 +90,6 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
   );
 
   const [planMsg, setPlanMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const inScopeMembers = useMemo(
@@ -183,24 +182,27 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
   };
 
   /** チーム編成ページへ。未保存の参加区分・出席があれば先に保存（サーバー側でチーム・的中もクリアされる） */
-  const navigateToLineup = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+  const navigateToLineup = async (e: MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     if (!isAdmin) {
-      router.push(`/practices/${session.id}/lineup`);
+      push(`/practices/${session.id}/lineup`);
       return;
     }
-    if (busy) return;
+    if (isBusy) return;
     if (hasUnsavedChanges) {
-      setBusy(true);
-      const ok = await saveAttendanceToServer();
-      setBusy(false);
-      if (!ok) return;
+      beginBlocking();
+      try {
+        const ok = await saveAttendanceToServer();
+        if (!ok) return;
+      } finally {
+        endBlocking();
+      }
     }
-    router.push(`/practices/${session.id}/lineup`);
+    push(`/practices/${session.id}/lineup`);
   };
 
   const openDeleteDialog = () => {
-    if (!isAdmin || busy) return;
+    if (!isAdmin || isBusy) return;
     setDeleteDialogOpen(true);
   };
 
@@ -217,17 +219,16 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
       if (!ok) return;
     }
     if (!window.confirm("この練習をまるごと削除しますか？記録もすべて消えます。")) return;
-    setBusy(true);
-    setPlanMsg(null);
-    const res = await fetch(`/api/practices/${session.id}`, { method: "DELETE" });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setPlanMsg(data.error ?? "削除に失敗しました");
-      return;
-    }
-    router.replace("/practices");
-    router.refresh();
+    await runBlocking(async () => {
+      setPlanMsg(null);
+      const res = await fetch(`/api/practices/${session.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setPlanMsg(data.error ?? "削除に失敗しました");
+        return;
+      }
+      replace("/practices");
+    });
   };
 
   const setAttendanceStatus = (memberId: string, status: AttendanceState) => {
@@ -248,41 +249,28 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
 
   return (
     <div className="space-y-8">
-      {busy ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40"
-          role="status"
-          aria-live="polite"
-          aria-label="保存中"
-        >
-          <div className="flex flex-col items-center gap-3 rounded-xl bg-white px-6 py-5 text-sm font-semibold text-zinc-900 shadow-lg">
-            <span className="h-9 w-9 animate-spin rounded-full border-4 border-zinc-200 border-t-indigo-600" />
-            <span>保存中...</span>
-          </div>
-        </div>
-      ) : null}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="min-w-0 space-y-2">
-          <Link className={`${uiLinkChip} text-xs`} href="/practices">
+          <AppLink className={`${uiLinkChip} text-xs`} href="/practices">
             ← 一覧へ
-          </Link>
+          </AppLink>
           <h1 className="mt-2 text-2xl font-bold">
-            <Link
+            <AppLink
               href={`/practices/${session.id}/marks`}
               className="text-emerald-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
             >
               {formatPracticeDate(session.practiceDate)}
-            </Link>
+            </AppLink>
           </h1>
           <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">メモ: {session.memo || "—"}</p>
           <p className="mt-1 text-xs text-zinc-500">立ち数: {session.roundCount}</p>
         </div>
         {!isAdmin ? (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end">
-            <Link href={`/practices/${session.id}/marks`} className={`${uiBtnAccent} w-full justify-center sm:w-auto`}>
+            <AppLink href={`/practices/${session.id}/marks`} className={`${uiBtnAccent} w-full justify-center sm:w-auto`}>
               的中を見る
-            </Link>
+            </AppLink>
           </div>
         ) : null}
       </div>
@@ -301,13 +289,13 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
           <h2 className="text-sm font-semibold text-zinc-900">参加区分・出席（管理者）</h2>
           <p className="text-xs text-zinc-500">
             チーム編成（1チーム1〜6人）は
-            <Link
+            <AppLink
               className="font-medium text-indigo-800 underline"
               href={`/practices/${session.id}/lineup`}
               onClick={navigateToLineup}
             >
               次のページ
-            </Link>
+            </AppLink>
             です。「チーム編成へ」で保存して次のページに進みます。保存すると、
             <strong className="text-zinc-800">既存のチーム編成と記録はすべてクリア</strong>
             されます。
@@ -319,7 +307,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
                 <button
                   key={opt.value}
                   type="button"
-                  disabled={busy}
+                  disabled={isBusy}
                   onClick={() => setGenderScope(opt.value)}
                   className={uiToggleChoice(genderScope === opt.value)}
                 >
@@ -350,7 +338,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
                           <div className="flex flex-wrap items-center gap-1">
                             <button
                               type="button"
-                              disabled={busy}
+                              disabled={isBusy}
                               onClick={() => setAttendanceStatus(m.id, "present")}
                               className={attendanceChoiceClass("present", current === "present")}
                             >
@@ -361,7 +349,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
                                 current === "present" ? "border-zinc-200 bg-white text-zinc-600" : attendanceChoiceClass(current, true)
                               }`}
                               value={current === "present" ? "absent" : current}
-                              disabled={busy}
+                              disabled={isBusy}
                               onClick={() => {
                                 if (current === "present") setAttendanceStatus(m.id, "absent");
                               }}
@@ -407,7 +395,7 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
                       <select
                         className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm"
                         value={absentReasons[m.id] ?? "私用"}
-                        disabled={busy}
+                        disabled={isBusy}
                         onChange={(e) => setAbsentReason(m.id, e.target.value as AbsentReason)}
                       >
                         {ABSENT_REASON_OPTIONS.map((reason) => (
@@ -426,19 +414,19 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
           <div className="flex flex-wrap items-center gap-3 border-t border-zinc-100 pt-4 sm:justify-between">
             <button
               type="button"
-              disabled={busy}
+              disabled={isBusy}
               className={`${uiBtnDangerOutline} justify-center`}
               onClick={openDeleteDialog}
             >
               練習を削除
             </button>
-            <Link
+            <AppLink
               href={`/practices/${session.id}/lineup`}
               className={`${uiBtnSecondary} justify-center`}
               onClick={navigateToLineup}
             >
               チーム編成へ →
-            </Link>
+            </AppLink>
           </div>
           {planMsg ? <p className="mt-2 text-sm text-red-700">{planMsg}</p> : null}
         </section>
@@ -459,20 +447,20 @@ export function PracticeDetail({ session, members, isAdmin }: Props) {
               : ""}
           </p>
           <p>
-            <Link className="font-medium text-indigo-800 underline" href={`/practices/${session.id}/lineup`}>
+            <AppLink className="font-medium text-indigo-800 underline" href={`/practices/${session.id}/lineup`}>
               チーム編成の表示
-            </Link>
+            </AppLink>
             {" · "}
-            <Link className="font-medium text-emerald-800 underline" href={`/practices/${session.id}/marks`}>
+            <AppLink className="font-medium text-emerald-800 underline" href={`/practices/${session.id}/marks`}>
               的中を見る
-            </Link>
+            </AppLink>
           </p>
         </section>
       )}
 
       {deleteDialogOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/40 p-4"
           role="presentation"
           onClick={closeDeleteDialog}
         >

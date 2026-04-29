@@ -14,7 +14,7 @@ import {
   splitRoleSlots,
 } from "@/lib/memberFields";
 import { uiBtnMuted, uiBtnPrimary, uiBtnSmDanger, uiBtnSmSecondary } from "@/lib/uiButtons";
-import { useRouter } from "next/navigation";
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
 import { useMemo, useState, useEffect } from "react";
 
 export type MemberRow = {
@@ -96,7 +96,7 @@ function RoleSlotPicker({ slots, onSlotsChange, idPrefix, selectClassName }: Rol
 /** 部員一覧と追加・保存（管理者のみ操作可） */
 export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: Props) {
   const canEdit = isAdmin && !readOnlyDb;
-  const router = useRouter();
+  const { refresh, runBlocking, isBusy } = useGlobalBusy();
   const [rows, setRows] = useState<MemberRow[]>(initialMembers);
   const [newFamily, setNewFamily] = useState("");
   const [newGiven, setNewGiven] = useState("");
@@ -104,7 +104,6 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
   const [newGradeYear, setNewGradeYear] = useState("");
   const [newGender, setNewGender] = useState("");
   const [newRoleSlots, setNewRoleSlots] = useState<string[]>([""]);
-  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const [filterGrade, setFilterGrade] = useState("");
@@ -129,8 +128,6 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
     return list;
   }, [rows, filterGrade, filterGender, nameSearch]);
 
-  const refresh = () => router.refresh();
-
   const patchRow = (id: string, patch: Partial<Omit<MemberRow, "id">>) => {
     if (!canEdit) return;
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -146,33 +143,33 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
       setMsg("学年と男女を選んでください");
       return;
     }
-    setBusy(true);
     setMsg(null);
-    const res = await fetch("/api/members", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        familyName: newFamily.trim(),
-        givenName: newGiven.trim(),
-        nameKana: newNameKana.trim(),
-        gradeYear: newGradeYear,
-        gender: newGender,
-        role: joinRoleSlots(newRoleSlots),
-      }),
+    await runBlocking(async () => {
+      const res = await fetch("/api/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          familyName: newFamily.trim(),
+          givenName: newGiven.trim(),
+          nameKana: newNameKana.trim(),
+          gradeYear: newGradeYear,
+          gender: newGender,
+          role: joinRoleSlots(newRoleSlots),
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setMsg(data.error ?? "追加に失敗しました");
+        return;
+      }
+      setNewFamily("");
+      setNewGiven("");
+      setNewNameKana("");
+      setNewGradeYear("");
+      setNewGender("");
+      setNewRoleSlots([""]);
+      refresh();
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setMsg(data.error ?? "追加に失敗しました");
-      return;
-    }
-    setNewFamily("");
-    setNewGiven("");
-    setNewNameKana("");
-    setNewGradeYear("");
-    setNewGender("");
-    setNewRoleSlots([""]);
-    refresh();
   };
 
   const saveAll = async () => {
@@ -183,35 +180,35 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
         return;
       }
     }
-    setBusy(true);
     setMsg(null);
-    const res = await fetch("/api/members/bulk", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ members: rows }),
+    await runBlocking(async () => {
+      const res = await fetch("/api/members/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ members: rows }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setMsg(data.error ?? "保存に失敗しました");
+        return;
+      }
+      refresh();
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setMsg(data.error ?? "保存に失敗しました");
-      return;
-    }
-    refresh();
   };
 
   const remove = async (id: string) => {
     if (!canEdit) return;
     if (!confirm("この部員を削除しますか？関連する記録も消えます。")) return;
-    setBusy(true);
     setMsg(null);
-    const res = await fetch(`/api/members/${id}`, { method: "DELETE" });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setMsg(data.error ?? "削除に失敗しました");
-      return;
-    }
-    refresh();
+    await runBlocking(async () => {
+      const res = await fetch(`/api/members/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setMsg(data.error ?? "削除に失敗しました");
+        return;
+      }
+      refresh();
+    });
   };
 
   /** 表内プルダウン: 学年と男女で高さを揃える */
@@ -311,7 +308,7 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
           <div className="mt-3 flex flex-wrap justify-end gap-2">
             <button
               type="button"
-              disabled={busy || !newFamily.trim() || !newGiven.trim() || !newGradeYear || !newGender}
+              disabled={isBusy || !newFamily.trim() || !newGiven.trim() || !newGradeYear || !newGender}
               className={uiBtnPrimary}
               onClick={() => void add()}
             >
@@ -323,7 +320,7 @@ export function MembersManager({ initialMembers, isAdmin, readOnlyDb = false }: 
             <div className="flex justify-end">
               <button
                 type="button"
-                disabled={busy || rows.length === 0}
+                disabled={isBusy || rows.length === 0}
                 className={uiBtnMuted}
                 onClick={() => void saveAll()}
               >

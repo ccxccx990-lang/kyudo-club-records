@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { GlobalBusyProvider } from "@/components/GlobalBusyProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
@@ -35,8 +36,10 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full bg-white`}
     >
       <body className="flex min-h-full flex-col bg-white text-zinc-900">
-        <SiteHeader />
-        <div className="flex-1">{children}</div>
+        <GlobalBusyProvider>
+          <SiteHeader />
+          <div className="flex-1">{children}</div>
+        </GlobalBusyProvider>
       </body>
     </html>
   );

@@ -1,9 +1,17 @@
 "use client";
 
+import AppLink from "@/components/AppLink";
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
 import { uiBtnHeader, uiBtnHeaderPrimary } from "@/lib/uiButtons";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+
+/** ログイン状態の取得のみ。logout 後の再検証にも使う（useEffect の依存配列とは無関係に置く）。 */
+async function fetchIsAdmin(): Promise<boolean> {
+  const res = await fetch("/api/auth/me", { cache: "no-store" });
+  const data = (await res.json()) as { admin?: boolean };
+  return Boolean(data.admin);
+}
 
 function navButtonClass(active: boolean): string {
   const base =
@@ -16,14 +24,8 @@ function navButtonClass(active: boolean): string {
 /** 画面上部のナビゲーション */
 export function SiteHeader() {
   const pathname = usePathname();
-  const router = useRouter();
+  const { refresh, runBlocking } = useGlobalBusy();
   const [admin, setAdmin] = useState<boolean | null>(null);
-
-  const refresh = useCallback(async () => {
-    const res = await fetch("/api/auth/me", { cache: "no-store" });
-    const data = (await res.json()) as { admin?: boolean };
-    setAdmin(Boolean(data.admin));
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,20 +40,22 @@ export function SiteHeader() {
   }, [pathname]);
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    await refresh();
-    router.refresh();
+    await runBlocking(async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setAdmin(await fetchIsAdmin());
+      refresh();
+    });
   };
 
   return (
     <header className="border-b border-zinc-200 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-medium text-zinc-800">
-          <Link className="text-base font-semibold text-indigo-800" href="/">
+          <AppLink className="text-base font-semibold text-indigo-800" href="/">
             的中ログ
-          </Link>
+          </AppLink>
           <nav className="flex flex-wrap gap-2.5 text-zinc-600">
-            <Link
+            <AppLink
               className={navButtonClass(
                 pathname === "/practices" ||
                   (pathname.startsWith("/practices/") && !pathname.startsWith("/practices/input")),
@@ -59,26 +63,20 @@ export function SiteHeader() {
               href="/practices"
             >
               記録
-            </Link>
-            <Link
+            </AppLink>
+            <AppLink
               className={navButtonClass(pathname === "/members" || pathname.startsWith("/members/"))}
               href="/members"
             >
               部員
-            </Link>
-            <Link
-              className={navButtonClass(pathname.startsWith("/reports/"))}
-              href="/reports/personal-hit-rate"
-            >
+            </AppLink>
+            <AppLink className={navButtonClass(pathname.startsWith("/reports/"))} href="/reports/personal-hit-rate">
               的中率
-            </Link>
+            </AppLink>
             {admin ? (
-              <Link
-                className={navButtonClass(pathname.startsWith("/practices/input"))}
-                href="/practices/input"
-              >
+              <AppLink className={navButtonClass(pathname.startsWith("/practices/input"))} href="/practices/input">
                 入力
-              </Link>
+              </AppLink>
             ) : null}
           </nav>
         </div>
@@ -95,9 +93,9 @@ export function SiteHeader() {
               </button>
             </>
           ) : (
-            <Link className={uiBtnHeaderPrimary} href="/admin/login">
+            <AppLink className={uiBtnHeaderPrimary} href="/admin/login">
               管理者ログイン
-            </Link>
+            </AppLink>
           )}
         </div>
       </div>

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 import { readIsAdmin } from "@/lib/serverAdmin";
 
 /** ホームのナビカード（見た目の高さ・幅をグリッド内で揃える。min-h は従来の約半分） */
@@ -22,31 +22,31 @@ export default async function HomePage() {
         className={`grid gap-3 sm:grid-cols-2 ${isAdmin ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}
       >
         <li className="min-h-0">
-          <Link className={homeNavTileClass} href="/practices">
+          <AppLink className={homeNavTileClass} href="/practices">
             <div className="text-xs font-semibold leading-tight text-indigo-800">正規練習</div>
             <div className="mt-0.5 text-xs leading-snug text-zinc-600">一覧・閲覧</div>
-          </Link>
+          </AppLink>
         </li>
         <li className="min-h-0">
-          <Link className={homeNavTileClass} href="/members">
+          <AppLink className={homeNavTileClass} href="/members">
             <div className="text-xs font-semibold leading-tight text-indigo-800">部員</div>
             <div className="mt-0.5 text-xs leading-snug text-zinc-600">名前の登録（管理者）</div>
-          </Link>
+          </AppLink>
         </li>
         <li className="min-h-0">
-          <Link className={homeNavTileClass} href="/reports/personal-hit-rate">
+          <AppLink className={homeNavTileClass} href="/reports/personal-hit-rate">
             <div className="text-xs font-semibold leading-tight text-indigo-800">的中率</div>
             <div className="mt-0.5 text-xs leading-snug text-zinc-600">集計・PDF</div>
-          </Link>
+          </AppLink>
         </li>
         {isAdmin ? (
           <li className="min-h-0">
-            <Link className={homeNavTileClass} href="/practices/input">
+            <AppLink className={homeNavTileClass} href="/practices/input">
               <div className="text-xs font-semibold leading-tight text-indigo-800">入力</div>
               <div className="mt-0.5 text-xs leading-snug text-zinc-600">
                 正規練習の作成・出席・チーム・的中
               </div>
-            </Link>
+            </AppLink>
           </li>
         ) : null}
       </ul>

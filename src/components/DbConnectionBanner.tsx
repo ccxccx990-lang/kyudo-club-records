@@ -1,4 +1,4 @@
-import Link from "next/link";
+import AppLink from "@/components/AppLink";
 
 /** DB 接続失敗時にサーバーコンポーネントから表示する案内 */
 export function DbConnectionBanner({ message }: { message: string }) {
@@ -18,9 +18,9 @@ export function DbConnectionFailPage({ message }: { message: string }) {
     <main className="mx-auto max-w-6xl space-y-4 px-4 py-10">
       <DbConnectionBanner message={message} />
       <p className="text-sm text-zinc-600">
-        <Link className="font-medium text-indigo-800 underline" href="/practices">
+        <AppLink className="font-medium text-indigo-800 underline" href="/practices">
           正規練習一覧へ
-        </Link>
+        </AppLink>
       </p>
     </main>
   );

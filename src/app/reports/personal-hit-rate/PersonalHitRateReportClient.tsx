@@ -1,6 +1,7 @@
 "use client";
 
 import type { PersonalHitRateRow } from "@/lib/personalHitRateReport";
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
 import { uiBtnAccent, uiToggleChoice } from "@/lib/uiButtons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -133,6 +134,7 @@ function sortHitRateRows(rows: PersonalHitRateRow[]): PersonalHitRateRow[] {
 }
 
 export function PersonalHitRateReportClient() {
+  const { runBlocking, isBusy } = useGlobalBusy();
   const def = useMemo(() => defaultYearMonth(), []);
   const [year, setYear] = useState(String(def.year));
   const [month, setMonth] = useState(def.month);
@@ -141,9 +143,7 @@ export function PersonalHitRateReportClient() {
   const [kind, setKind] = useState<Kind>("all");
   const [rows, setRows] = useState<PersonalHitRateRow[]>([]);
   const [meta, setMeta] = useState<{ dateFrom: string; dateTo: string } | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pdfBusy, setPdfBusy] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -152,42 +152,42 @@ export function PersonalHitRateReportClient() {
       setError("年は 2000〜2100 の整数で入力してください");
       return;
     }
-    setLoading(true);
-    setError(null);
-    const params = new URLSearchParams({
-      year: String(y),
-      month: String(month),
-      period,
-      gender,
-      kind,
-    });
-    const res = await fetch(`/api/reports/personal-hit-rate?${params}`, { cache: "no-store" });
-    setLoading(false);
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      let detail = "";
-      try {
-        const data = JSON.parse(text) as { error?: string };
-        detail = data.error ?? "";
-      } catch {
-        detail = text.slice(0, 200);
+    await runBlocking(async () => {
+      setError(null);
+      const params = new URLSearchParams({
+        year: String(y),
+        month: String(month),
+        period,
+        gender,
+        kind,
+      });
+      const res = await fetch(`/api/reports/personal-hit-rate?${params}`, { cache: "no-store" });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        let detail = "";
+        try {
+          const data = JSON.parse(text) as { error?: string };
+          detail = data.error ?? "";
+        } catch {
+          detail = text.slice(0, 200);
+        }
+        setError(
+          detail
+            ? `取得に失敗しました（${res.status}）: ${detail}`
+            : `取得に失敗しました（${res.status}）。DB のマイグレーション（sessionKind 列）を実行してください。`,
+        );
+        setRows([]);
+        setMeta(null);
+        return;
       }
-      setError(
-        detail
-          ? `取得に失敗しました（${res.status}）: ${detail}`
-          : `取得に失敗しました（${res.status}）。DB のマイグレーション（sessionKind 列）を実行してください。`,
-      );
-      setRows([]);
-      setMeta(null);
-      return;
-    }
-    const data = (await res.json()) as {
-      meta: { dateFrom: string; dateTo: string };
-      rows: PersonalHitRateRow[];
-    };
-    setRows(data.rows);
-    setMeta(data.meta);
-  }, [year, month, period, gender, kind]);
+      const data = (await res.json()) as {
+        meta: { dateFrom: string; dateTo: string };
+        rows: PersonalHitRateRow[];
+      };
+      setRows(data.rows);
+      setMeta(data.meta);
+    });
+  }, [year, month, period, gender, kind, runBlocking]);
 
   useEffect(() => {
     void fetchData();
@@ -227,48 +227,47 @@ export function PersonalHitRateReportClient() {
       setPdfError("PDF 用のブロックが見つかりません。");
       return;
     }
-    setPdfError(null);
-    setPdfBusy(true);
-    try {
-      const y = Number(year);
-      const safeYear = Number.isInteger(y) && y >= 2000 && y <= 2100 ? y : def.year;
-      const filename = `的中率_${safeYear}年${month}月.pdf`;
+    await runBlocking(async () => {
+      setPdfError(null);
+      try {
+        const y = Number(year);
+        const safeYear = Number.isInteger(y) && y >= 2000 && y <= 2100 ? y : def.year;
+        const filename = `的中率_${safeYear}年${month}月.pdf`;
 
-      const res = await fetch("/api/reports/personal-hit-rate/pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ html: el.outerHTML }),
-      });
+        const res = await fetch("/api/reports/personal-hit-rate/pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ html: el.outerHTML }),
+        });
 
-      if (!res.ok) {
-        let detail = await res.text();
-        try {
-          const j = JSON.parse(detail) as { error?: string };
-          if (j.error) detail = j.error;
-        } catch {
-          /* そのまま */
+        if (!res.ok) {
+          let detail = await res.text();
+          try {
+            const j = JSON.parse(detail) as { error?: string };
+            if (j.error) detail = j.error;
+          } catch {
+            /* そのまま */
+          }
+          throw new Error(detail || `HTTP ${res.status}`);
         }
-        throw new Error(detail || `HTTP ${res.status}`);
-      }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      console.error("personal-hit-rate pdf failed", e);
-      setPdfError(
-        detail
-          ? `PDF の生成に失敗しました: ${detail}`
-          : "PDF の生成に失敗しました。サーバーで Playwright（Chromium）が使えるか確認してください。",
-      );
-    } finally {
-      setPdfBusy(false);
-    }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        const detail = e instanceof Error ? e.message : String(e);
+        console.error("personal-hit-rate pdf failed", e);
+        setPdfError(
+          detail
+            ? `PDF の生成に失敗しました: ${detail}`
+            : "PDF の生成に失敗しました。サーバーで Playwright（Chromium）が使えるか確認してください。",
+        );
+      }
+    });
   };
 
   return (
@@ -390,15 +389,14 @@ export function PersonalHitRateReportClient() {
           <div className="min-w-0 flex-1 space-y-1">
             {pdfError ? <p className="text-sm text-red-700">{pdfError}</p> : null}
             {error ? <p className="text-sm text-red-700">{error}</p> : null}
-            {loading ? <p className="text-sm text-zinc-500">読み込み中…</p> : null}
           </div>
           <button
             type="button"
-            disabled={pdfBusy || loading}
+            disabled={isBusy}
             onClick={() => void downloadPdf()}
             className={`${uiBtnAccent} w-full shrink-0 justify-center sm:w-auto sm:min-w-[11rem]`}
           >
-            {pdfBusy ? "PDF を作成中…" : "PDFをダウンロード"}
+            {isBusy ? "処理中…" : "PDFをダウンロード"}
           </button>
         </div>
       </section>

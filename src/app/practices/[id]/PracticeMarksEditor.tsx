@@ -33,8 +33,8 @@ import {
   type PracticeSubstitution,
 } from "@/lib/practiceSessionPlan";
 import { uiBtnPrimary, uiBtnSecondary, uiBtnSmDanger, uiLinkChip } from "@/lib/uiButtons";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import AppLink from "@/components/AppLink";
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export type SessionMarksProps = {
@@ -287,7 +287,7 @@ function MarksMemberMarksRow({
 
 /** 的中入力（別ページ用） */
 export function PracticeMarksEditor({ session, members, records, isAdmin }: Props) {
-  const router = useRouter();
+  const { refresh, runBlocking, isBusy } = useGlobalBusy();
 
   const sessionGenderScope: GenderScope = isGenderScope(session.genderScope) ? session.genderScope : "all";
   // JSON パース結果は毎レンダーで新参照になるため useMemo で安定化（useEffect 無限ループ防止）
@@ -422,7 +422,6 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   const [subInMemberId, setSubInMemberId] = useState("");
   const [substitutionMsg, setSubstitutionMsg] = useState<string | null>(null);
   const [marksMsg, setMarksMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     setSubstitutions(serverSubstitutions);
@@ -559,7 +558,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   }, [lineupMemberIdSet, orderedMembers, session.sessionKind]);
 
   const openSubstitutionDialog = () => {
-    if (!isAdmin || busy || substitutionOutCandidates.length === 0) return;
+    if (!isAdmin || isBusy || substitutionOutCandidates.length === 0) return;
     const firstOut = substitutionOutCandidates[0]?.id ?? "";
     const firstIn = replacementCandidates.find((m) => m.id !== firstOut)?.id ?? "";
     setSubRoundIndex(1);
@@ -570,21 +569,21 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   };
 
   const saveSubstitutionsToServer = async (next: PracticeSubstitution[]): Promise<boolean> => {
-    setBusy(true);
     setSubstitutionMsg(null);
-    const res = await fetch(`/api/practices/${session.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ substitutions: next }),
+    return runBlocking(async () => {
+      const res = await fetch(`/api/practices/${session.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ substitutions: next }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setSubstitutionMsg(data.error ?? "交代の保存に失敗しました");
+        return false;
+      }
+      setSubstitutions(next);
+      return true;
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setSubstitutionMsg(data.error ?? "交代の保存に失敗しました");
-      return false;
-    }
-    setSubstitutions(next);
-    return true;
   };
 
   const addSubstitution = async () => {
@@ -636,7 +635,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
   };
 
   const removeSubstitution = async (target: PracticeSubstitution) => {
-    if (!isAdmin || busy) return;
+    if (!isAdmin || isBusy) return;
     const next = substitutions.filter(
       (s) =>
         !(
@@ -676,7 +675,6 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
 
   const saveMarks = async () => {
     if (!isAdmin) return;
-    setBusy(true);
     setMarksMsg(null);
 
     const items: { memberId: string; roundIndex: number; marks: string }[] = [];
@@ -693,18 +691,19 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       }
     }
 
-    const res = await fetch(`/api/practices/${session.id}/records`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items, clears }),
+    await runBlocking(async () => {
+      const res = await fetch(`/api/practices/${session.id}/records`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, clears }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setMarksMsg(data.error ?? "保存に失敗しました");
+        return;
+      }
+      refresh();
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setMarksMsg(data.error ?? "保存に失敗しました");
-      return;
-    }
-    router.refresh();
   };
 
   const useLineupPreviewLayout =
@@ -719,15 +718,15 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between">
         <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap gap-2">
-            <Link className={uiLinkChip} href={`/practices/${session.id}`}>
+            <AppLink className={uiLinkChip} href={`/practices/${session.id}`}>
               ← 参加区分・出席
-            </Link>
-            <Link className={uiLinkChip} href={`/practices/${session.id}/lineup`}>
+            </AppLink>
+            <AppLink className={uiLinkChip} href={`/practices/${session.id}/lineup`}>
               チーム編成
-            </Link>
-            <Link className={uiLinkChip} href="/practices">
+            </AppLink>
+            <AppLink className={uiLinkChip} href="/practices">
               一覧へ
-            </Link>
+            </AppLink>
           </div>
           <h1 className="mt-2 text-2xl font-bold">{formatPracticeDate(session.practiceDate)}</h1>
           <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-600">メモ: {session.memo || "—"}</p>
@@ -750,7 +749,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <button
                 type="button"
-                disabled={busy}
+                disabled={isBusy}
                 className={`${uiBtnSecondary} w-full shrink-0 justify-center sm:w-auto`}
                 onClick={openSubstitutionDialog}
               >
@@ -758,7 +757,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
               </button>
               <button
                 type="button"
-                disabled={busy}
+                disabled={isBusy}
                 className={`${uiBtnPrimary} w-full shrink-0 justify-center sm:w-auto`}
                 onClick={() => void saveMarks()}
               >
@@ -919,7 +918,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
                     <button
                       type="button"
                       className={`${uiBtnSmDanger} shrink-0`}
-                      disabled={busy}
+                      disabled={isBusy}
                       onClick={() => void removeSubstitution(s)}
                     >
                       削除
@@ -933,7 +932,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
       </section>
       {substitutionDialogOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[10001] flex items-center justify-center bg-black/40 p-4"
           role="presentation"
           onClick={() => setSubstitutionDialogOpen(false)}
         >
@@ -1019,7 +1018,7 @@ export function PracticeMarksEditor({ session, members, records, isAdmin }: Prop
               </button>
               <button
                 type="button"
-                disabled={busy || !subOutMemberId || !subInMemberId}
+                disabled={isBusy || !subOutMemberId || !subInMemberId}
                 className={`${uiBtnPrimary} w-full sm:w-auto`}
                 onClick={() => void addSubstitution()}
               >

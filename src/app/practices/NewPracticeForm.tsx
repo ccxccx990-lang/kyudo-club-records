@@ -1,7 +1,7 @@
 "use client";
 
 import { uiBtnPrimary, uiBtnSmSecondary, uiBtnStepper } from "@/lib/uiButtons";
-import { useRouter } from "next/navigation";
+import { useGlobalBusy } from "@/components/GlobalBusyProvider";
 import { useRef, useState } from "react";
 
 /** ネイティブ日付ピッカーを開く（透明オーバーレイより確実） */
@@ -48,7 +48,7 @@ function ymdSlashOrIsoToIso(s: string): string | null {
 
 /** 正規練習の新規作成フォーム（管理者のみ表示） */
 export function NewPracticeForm() {
-  const router = useRouter();
+  const { push, runBlocking, isBusy } = useGlobalBusy();
   const today = new Date();
   const yyyyMmDd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 
@@ -58,7 +58,6 @@ export function NewPracticeForm() {
   const [maxMato, setMaxMato] = useState(8);
   const [roundCount, setRoundCount] = useState(5);
   const [sessionKind, setSessionKind] = useState<"joint" | "match">("joint");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hiddenDateRef = useRef<HTMLInputElement>(null);
 
@@ -71,24 +70,23 @@ export function NewPracticeForm() {
     }
     setPracticeDate(parsed);
     setDateDisplay(isoDateToYmdSlash(parsed));
-    setBusy(true);
     setError(null);
-    const res = await fetch("/api/practices", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ practiceDate: parsed, memo, maxMato, roundCount, sessionKind }),
+    await runBlocking(async () => {
+      const res = await fetch("/api/practices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ practiceDate: parsed, memo, maxMato, roundCount, sessionKind }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setError(data.error ?? "作成に失敗しました");
+        return;
+      }
+      const data = (await res.json()) as { session?: { id: string } };
+      if (data.session?.id) {
+        push(`/practices/${data.session.id}`);
+      }
     });
-    setBusy(false);
-    if (!res.ok) {
-      const data = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(data.error ?? "作成に失敗しました");
-      return;
-    }
-    const data = (await res.json()) as { session?: { id: string } };
-    if (data.session?.id) {
-      router.push(`/practices/${data.session.id}`);
-      router.refresh();
-    }
   };
 
   const fieldHalf = "block w-full sm:w-1/2 min-w-0 text-sm text-zinc-700";
@@ -200,8 +198,8 @@ export function NewPracticeForm() {
       </div>
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <div className="flex justify-end">
-        <button type="submit" disabled={busy} className={`${uiBtnPrimary} w-full max-w-md justify-center sm:w-auto`}>
-          {busy ? "作成中…" : "作成して記録へ"}
+        <button type="submit" disabled={isBusy} className={`${uiBtnPrimary} w-full max-w-md justify-center sm:w-auto`}>
+          {isBusy ? "作成中…" : "作成して記録へ"}
         </button>
       </div>
     </form>
